@@ -1,5 +1,9 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 # ─────────────────────────────────────
 # FoodMind Backend — requirements.txt
+# Note: torch + torchvision installed
+# separately in Dockerfile
 # ─────────────────────────────────────
 
 # ── Web Framework ─────────────────────
@@ -27,8 +31,6 @@ pydantic-settings
 
 # ── AI / ML ───────────────────────────
 transformers
-torch==2.0.0+cpu
-torchvision==0.15.0+cpu
 Pillow
 
 # ── Gemini Flash ──────────────────────
