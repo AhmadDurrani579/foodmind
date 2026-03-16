@@ -1,0 +1,46 @@
+# ─────────────────────────────────────
+# FoodMind Backend — requirements.txt
+# ─────────────────────────────────────
+
+# ── Web Framework ─────────────────────
+fastapi
+uvicorn[standard]
+python-multipart
+python-dotenv
+
+# ── WebSocket ─────────────────────────
+websockets
+
+# ── Database ──────────────────────────
+sqlalchemy
+psycopg2-binary
+alembic
+
+# ── Auth ──────────────────────────────
+bcrypt==4.0.1
+passlib==1.7.4
+python-jose[cryptography]
+
+# ── Validation ────────────────────────
+pydantic[email]
+pydantic-settings
+
+# ── AI / ML ───────────────────────────
+transformers
+torch==2.0.0+cpu
+torchvision==0.15.0+cpu
+Pillow
+
+# ── Gemini Flash ──────────────────────
+google-generativeai
+
+# ── HTTP Requests ─────────────────────
+requests
+httpx
+
+# ── Image Processing ──────────────────
+opencv-python-headless
+numpy
+
+# ── Caching ───────────────────────────
+redis

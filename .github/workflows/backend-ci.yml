@@ -1,0 +1,20 @@
+name: Sync to Hugging Face Hub
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Required to fetch the full history for subtree
+
+      - name: Push Backend to Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Sends ONLY the 'backend' folder to HF
+          git push --force https://AhmadDurrani:$HF_TOKEN@huggingface.co/spaces/AhmadDurrani/food-mind `git subtree split --prefix backend main`:main
