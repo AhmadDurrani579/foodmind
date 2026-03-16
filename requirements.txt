@@ -2,8 +2,7 @@
 
 # ─────────────────────────────────────
 # FoodMind Backend — requirements.txt
-# Note: torch + torchvision installed
-# separately in Dockerfile
+# torch + torchvision in Dockerfile
 # ─────────────────────────────────────
 
 # ── Web Framework ─────────────────────

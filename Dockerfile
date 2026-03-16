@@ -11,10 +11,10 @@ RUN apt-get update && apt-get install -y \
 
 # Install PyTorch CPU (separate step for better caching)
 RUN pip install --no-cache-dir \
-    torch==2.0.0+cpu \
-    torchvision==0.15.0+cpu \
+    torch==2.1.0+cpu \
+    torchvision==0.16.0+cpu \
     --extra-index-url https://download.pytorch.org/whl/cpu
-
+    
 # Install all other dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
