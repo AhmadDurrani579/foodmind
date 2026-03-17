@@ -16,11 +16,7 @@ app.add_middleware(
 )
 
 @app.get("/")
-async def health():
-    return {
-        "status": "ok",
-        "app": "FoodMind Backend",
-        "version": "1.0.0"
-    }
+def root():
+    return {"message": "FoodMind API is running"}
 
 app.include_router(auth_router)
