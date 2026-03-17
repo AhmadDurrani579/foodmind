@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.router.auth import router as auth_router
 
 
 app = FastAPI( title="FoodMind Backend API",
@@ -21,3 +22,5 @@ async def health():
         "app": "FoodMind Backend",
         "version": "1.0.0"
     }
+
+app.include_router(auth_router)
