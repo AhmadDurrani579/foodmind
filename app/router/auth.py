@@ -5,8 +5,9 @@ import os, uuid
 from app.core.dependencies import get_current_user
 from app.db.database import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserLogin, TokenResponse
+from app.schemas.user import UserCreate, UserLogin, TokenResponse, UserResponse
 from app.core.security import hash_password, verify_password, create_access_token
+from fastapi import Request
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -15,21 +16,11 @@ os.makedirs("uploads", exist_ok=True)
 
 
 @router.post("/signup", response_model=TokenResponse)
-def signup(payload: UserCreate, db: Session = Depends(get_db)):
+def signup(payload: UserCreate, request: Request, db: Session = Depends(get_db)):
 
-    # Check email
-    if db.query(User).filter(User.email == payload.email).first():
-        raise HTTPException(
-            status_code=400,
-            detail="Email already registered"
-        )
-
-    # Check username
-    if db.query(User).filter(User.username == payload.username).first():
-        raise HTTPException(
-            status_code=400,
-            detail="Username already taken"
-        )
+    existing_user = db.query(User).filter(User.email == payload.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
 
     user = User(
         email=payload.email,
@@ -48,14 +39,33 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
         "email": user.email
     })
 
+    # Build full avatar URL
+    avatar_url = None
+    if user.avatar_url:
+        avatar_url = f"{request.base_url}{user.avatar_url.lstrip('/')}"
+
+    user_response = UserResponse(
+        id=user.id,
+        email=user.email,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        avatar_url=avatar_url,
+        created_at=user.created_at
+    )
+
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": user
+        "user": user_response
     }
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: UserLogin, db: Session = Depends(get_db)):
+def login(
+    payload: UserLogin,
+    request: Request,
+    db: Session = Depends(get_db)
+):
 
     user = db.query(User).filter(User.email == payload.email).first()
 
@@ -76,12 +86,25 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
         "email": user.email
     })
 
+    avatar_url = None
+    if user.avatar_url:
+        avatar_url = f"{request.base_url}{user.avatar_url.lstrip('/')}"
+
+    user_response = UserResponse(
+        id=user.id,
+        email=user.email,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        avatar_url=avatar_url,
+        created_at=user.created_at
+    )
+
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": user
+        "user": user_response
     }
-
 
 @router.post("/users/avatar")
 async def upload_avatar(
