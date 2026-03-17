@@ -38,6 +38,11 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    def with_base_url(self, base_url: str):
+        if self.avatar_url:
+            self.avatar_url = f"{base_url}{self.avatar_url}"
+        return self
+        
 
 # -------------------------
 # Token Response
