@@ -17,12 +17,18 @@ os.makedirs("uploads", exist_ok=True)
 @router.post("/signup", response_model=TokenResponse)
 def signup(payload: UserCreate, db: Session = Depends(get_db)):
 
-    existing_user = db.query(User).filter(User.email == payload.email).first()
-
-    if existing_user:
+    # Check email
+    if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(
             status_code=400,
             detail="Email already registered"
+        )
+
+    # Check username
+    if db.query(User).filter(User.username == payload.username).first():
+        raise HTTPException(
+            status_code=400,
+            detail="Username already taken"
         )
 
     user = User(
@@ -47,7 +53,6 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user": user
     }
-
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: UserLogin, db: Session = Depends(get_db)):
