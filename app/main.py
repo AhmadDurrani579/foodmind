@@ -4,11 +4,16 @@ from app.router.auth import router as auth_router
 from fastapi import APIRouter, Depends
 from app.core.dependencies import get_current_user
 from app.router import users
+from fastapi.staticfiles import StaticFiles
+import os
 
 
 app = FastAPI( title="FoodMind Backend API",
                description="API for FoodMind backend services",
                version="1.0.0" )
+os.makedirs("uploads", exist_ok=True)
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,

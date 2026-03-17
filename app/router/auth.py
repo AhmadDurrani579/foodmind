@@ -89,7 +89,8 @@ async def upload_avatar(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    import uuid
+
+    os.makedirs("uploads", exist_ok=True)
 
     file_ext = file.filename.split(".")[-1]
     filename = f"{user.id}_{uuid.uuid4()}.{file_ext}"
@@ -99,12 +100,7 @@ async def upload_avatar(
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
-    # FULL PUBLIC URL
-    avatar_url = f"https://ahmaddurrani-food-mind.hf.space/uploads/{filename}"
-
-    user.avatar_url = avatar_url
+    user.avatar_url = f"/uploads/{filename}"
     db.commit()
 
-    return {
-        "avatar_url": avatar_url
-    }
+    return {"avatar_url": user.avatar_url}
