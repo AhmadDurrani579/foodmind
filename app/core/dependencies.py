@@ -14,8 +14,6 @@ credentials_exception = HTTPException(
     status_code=401,
     detail="Invalid or expired token",
 )
-
-
 def get_current_user(
     token: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db)

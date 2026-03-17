@@ -39,21 +39,8 @@ def signup(payload: UserCreate, request: Request, db: Session = Depends(get_db))
         "email": user.email
     })
 
-    # Build full avatar URL
-    avatar_url = None
-    if user.avatar_url:
-        avatar_url = f"{request.base_url}{user.avatar_url.lstrip('/')}"
-
-    user_response = UserResponse(
-        id=user.id,
-        email=user.email,
-        username=user.username,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        avatar_url=avatar_url,
-        created_at=user.created_at
-    )
-
+    user_response = build_user_response(user, request)
+    
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -86,19 +73,7 @@ def login(
         "email": user.email
     })
 
-    avatar_url = None
-    if user.avatar_url:
-        avatar_url = f"{request.base_url}{user.avatar_url.lstrip('/')}"
-
-    user_response = UserResponse(
-        id=user.id,
-        email=user.email,
-        username=user.username,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        avatar_url=avatar_url,
-        created_at=user.created_at
-    )
+    user_response = build_user_response(user, request)
 
     return {
         "access_token": token,
@@ -127,3 +102,18 @@ async def upload_avatar(
     db.commit()
 
     return {"avatar_url": user.avatar_url}
+
+def build_user_response(user: User, request: Request):
+    avatar_url = None
+    if user.avatar_url:
+        avatar_url = f"{request.base_url}{user.avatar_url.lstrip('/')}"
+
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        avatar_url=avatar_url,
+        created_at=user.created_at
+    )
