@@ -18,7 +18,8 @@ class User(Base):
     email = Column(
         String(255),
         unique=True,
-        nullable=False
+        nullable=False,
+        index=True
     )
 
     username = Column(
@@ -32,14 +33,22 @@ class User(Base):
         nullable=False
     )
 
+    last_name = Column(
+        String(100),
+        nullable=True
+    )
+
     password_hash = Column(
         Text,
         nullable=False
     )
 
-    avatar_url = Column(Text)
+    avatar_url = Column(
+        Text,
+        nullable=True
+    )
 
     created_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         server_default=func.now()
     )
