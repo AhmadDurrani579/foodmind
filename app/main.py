@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.router.auth import router as auth_router
+from fastapi import APIRouter, Depends
+from app.core.dependencies import get_current_user
+from app.router import users
 
 
 app = FastAPI( title="FoodMind Backend API",
@@ -19,4 +22,6 @@ app.add_middleware(
 def root():
     return {"message": "FoodMind API is running"}
 
+
 app.include_router(auth_router)
+app.include_router(users.router)
