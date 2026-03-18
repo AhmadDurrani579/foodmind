@@ -19,38 +19,30 @@ async def upload_image(
     user_id:     str,
     dish_name:   str = "food"
 ) -> str:
-    """
-    Upload image to Cloudinary
-    Returns permanent URL
-    """
+  
     try:
-        # Create folder per user
-        folder = f"foodmind/{user_id}"
-
-        # Clean dish name for public_id
         clean_name = dish_name.lower()\
             .replace(" ", "_")\
-            .replace("/", "_")
+            .replace("/", "_")\
+            .replace("(", "")\
+            .replace(")", "")
 
-        import time
-        public_id = f"{folder}/{clean_name}_{int(time.time())}"
+        public_id = f"foodmind/{user_id}/{clean_name}_{int(time.time())}"
 
-        # Upload
+        # ← Remove folder= parameter
+        # public_id already contains the full path
         result = cloudinary.uploader.upload(
             image_bytes,
-            public_id    = public_id,
-            folder       = folder,
+            public_id     = public_id,
             resource_type = "image",
             transformation = [
-                {"width": 800, "crop": "limit"},  # max 800px
-                {"quality": "auto"}               # auto compress
+                {"width": 800, "crop": "limit"},
+                {"quality": "auto"}
             ]
         )
 
-        url = result.get("secure_url", "")
-        print(f"✅ Image uploaded: {url}")
-        return url
+        return result.get("secure_url", "")
 
     except Exception as e:
-        print(f"Cloudinary error: {e}")
+        print(f"❌ Cloudinary error: {e}")
         return ""
