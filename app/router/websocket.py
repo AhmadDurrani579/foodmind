@@ -28,7 +28,6 @@ def verify_jwt(token: str):
 
 # ─────────────────────────────────────
 # MARK: — WebSocket Endpoint
-# ws://localhost:8000/ws/scan?token=JWT
 # ─────────────────────────────────────
 @router.websocket("/ws/scan")
 async def scan_socket(websocket: WebSocket):
