@@ -45,3 +45,7 @@ numpy
 
 # ── Caching ───────────────────────────
 redis
+
+# ── For Image Storage ───────────────────────────
+
+cloudinary
