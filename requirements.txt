@@ -33,7 +33,7 @@ transformers
 Pillow
 
 # ── Gemini Flash ──────────────────────
-google-generativeai
+google-genai
 
 # ── HTTP Requests ─────────────────────
 requests
