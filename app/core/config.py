@@ -1,32 +1,22 @@
-from pydantic_settings import BaseSettings
- 
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 class Settings(BaseSettings):
- 
-    # ── Auth ──────────────────────────
-    JWT_SECRET:    str = "change-this-secret"
+    # Database
+    DATABASE_URL: str
+
+    # JWT
+    JWT_SECRET: str = "changeme"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_DAYS: int = 30
- 
-    # ── Gemini ────────────────────────
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
+        # ── Gemini ────────────────────────
     GEMINI_API_KEY: str = ""
- 
-    # ── Database ──────────────────────
-    DATABASE_URL: str = ""
- 
-    # ── External APIs ─────────────────
-    # SKETCHFAB_TOKEN: str = ""
-    # MESHY_API_KEY:   str = ""
- 
-    class Config:
-        env_file = ".env"
- 
+
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="allow"
+    )
+
 settings = Settings()
- 
-
-
-
-
-
-
-
-
