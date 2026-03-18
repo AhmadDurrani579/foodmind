@@ -6,6 +6,7 @@ from app.core.dependencies import get_current_user
 from app.router import users
 from fastapi.staticfiles import StaticFiles
 import os
+from app.router import websocket, scan, auth
 
 
 app = FastAPI( title="FoodMind Backend API",
@@ -30,3 +31,7 @@ def root():
 
 app.include_router(auth_router)
 app.include_router(users.router)
+app.include_router(websocket.router)
+app.include_router(scan.router)
+app.include_router(auth.router)
+
