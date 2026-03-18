@@ -18,7 +18,7 @@ from app.db.database import get_db
 from app.db.models_scan import ScanDB
 from app.schemas.scan import ScanResponse
 from app.core.dependencies import get_current_user
-from app.models import User
+from app.models.user import User
 
 
 router = APIRouter(prefix="/scan", tags=["scan"])
