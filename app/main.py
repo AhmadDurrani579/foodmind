@@ -1,19 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.router.auth import router as auth_router
-from fastapi import APIRouter, Depends
-from app.core.dependencies import get_current_user
-from app.router import users
 from fastapi.staticfiles import StaticFiles
+from app.router import websocket, scan, auth, users
 import os
-from app.router import websocket, scan, auth
 
+app = FastAPI(
+    title="FoodMind Backend API",
+    description="API for FoodMind backend services",
+    version="1.0.0"
+)
 
-app = FastAPI( title="FoodMind Backend API",
-               description="API for FoodMind backend services",
-               version="1.0.0" )
 os.makedirs("uploads", exist_ok=True)
-
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.add_middleware(
@@ -28,10 +25,8 @@ app.add_middleware(
 def root():
     return {"message": "FoodMind API is running"}
 
-
-app.include_router(auth_router)
+# ── Routers ──────────────────────────
+app.include_router(auth.router)      # ← only once
 app.include_router(users.router)
 app.include_router(websocket.router)
 app.include_router(scan.router)
-app.include_router(auth.router)
-
