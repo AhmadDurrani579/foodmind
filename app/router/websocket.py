@@ -20,7 +20,7 @@ async def scan_socket(websocket: WebSocket):
 
     await websocket.accept()
     user_id = user.get("id")
-    print(f"✅ WebSocket connected — user: {user_id}")
+    print(f"WebSocket connected — user: {user_id}")
 
     await websocket.send_json({
         "type":    "connected",
@@ -60,9 +60,9 @@ async def scan_socket(websocket: WebSocket):
                 })
 
     except WebSocketDisconnect:
-        print(f"📱 Disconnected — user: {user_id}")
+        print(f"Disconnected — user: {user_id}")
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
         except:
