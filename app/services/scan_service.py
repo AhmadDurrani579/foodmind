@@ -9,6 +9,7 @@ import base64
 from app.services.gemini_service import analyse_food, validate_results
 from app.db.database import SessionLocal
 from app.db.models_scan import ScanDB
+                from app.services.cloudinary_service import upload_image
 
 class ScanService:
 
@@ -53,7 +54,6 @@ class ScanService:
             # ── Step 4: Upload to Cloudinary ──
             image_url = ""
             try:
-                from app.services.cloudinary_service import upload_image
                 image_url = await upload_image(
                     image_bytes=image_bytes,
                     user_id=user_id,
@@ -125,9 +125,9 @@ class ScanService:
             )
             db.add(scan)
             db.commit()
-            print(f"✅ Scan saved: {gemini_result.dish_name}")
+            print(f" Scan saved: {gemini_result.dish_name}")
         except Exception as e:
-            print(f"❌ Save error: {e}")
+            print(f" Save error: {e}")
             db.rollback()
         finally:
             db.close()
