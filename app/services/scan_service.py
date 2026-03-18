@@ -9,7 +9,7 @@ import base64
 from app.services.gemini_service import analyse_food, validate_results
 from app.db.database import SessionLocal
 from app.db.models_scan import ScanDB
-                from app.services.cloudinary_service import upload_image
+from app.services.cloudinary_service import upload_image 
 
 class ScanService:
 
