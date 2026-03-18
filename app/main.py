@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.router import websocket, scan, auth, users
+from app.router import websocket, scan, auth, users, posts
 import os
 
 app = FastAPI(
@@ -30,3 +30,4 @@ app.include_router(auth.router)      # ← only once
 app.include_router(users.router)
 app.include_router(websocket.router)
 app.include_router(scan.router)
+app.include_router(posts.router)
