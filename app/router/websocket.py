@@ -1,5 +1,5 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from app.auth.jwt_handler import verify_jwt  # ← use existing
+from app.auth.jwt_handler import verify_token  # ← use existing
 
 router = APIRouter()
 
@@ -12,7 +12,7 @@ async def scan_socket(websocket: WebSocket):
         await websocket.close(code=1008)
         return
 
-    user = verify_jwt(token.strip())
+    user = verify_token(token.strip())
 
     if not user:
         await websocket.close(code=1008)
