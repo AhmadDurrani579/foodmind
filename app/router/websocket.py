@@ -1,7 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from app.auth.jwt_handler import verify_token  # ← use existing
+from app.auth.jwt_handler import verify_token     
 
-router = APIRouter()
+router =  APIRouter()
 
 @router.websocket("/ws/scan")
 async def scan_socket(websocket: WebSocket):
