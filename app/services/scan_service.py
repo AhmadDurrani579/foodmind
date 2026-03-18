@@ -25,35 +25,69 @@ class ScanService:
         user_id: str
     ) -> dict:
 
-        image_bytes   = base64.b64decode(image_base64)
-        gemini_result = await analyse_food(...)
-        validation    = validate_results(...)
+        try:
+            # ── Step 1: Validate image ────────
+            if not image_base64:
+                return {
+                    "type":    "scan_error",
+                    "message": "No image received"
+                }
 
-        # ← Upload image to Cloudinary
-        from app.services.cloudinary_service import upload_image
-        image_url = await upload_image(
-            image_bytes = image_bytes,
-            user_id     = user_id,
-            dish_name   = gemini_result.dish_name
-        )
+            image_bytes = base64.b64decode(image_base64)
+            print(f"📸 Image: {len(image_bytes)} bytes")
 
-        # Save scan with image_url
-        await self.save_scan(
-            user_id    = user_id,
-            gemini_result = gemini_result,
-            validation = validation,
-            mobilenet_hint = mobilenet_hint,
-            mobilenet_confidence = mobilenet_confidence,
-            image_url  = image_url  # ← add this
-        )
+            # ── Step 2: Gemini analysis ───────
+            gemini_result = await analyse_food(
+                image_bytes=image_bytes,
+                mobilenet_hint=mobilenet_hint,
+                mobilenet_confidence=mobilenet_confidence
+            )
 
-        return {
-            "type":       "scan_result",
-            "result":     gemini_result.to_dict(),
-            "validation": validation,
-            "image_url":  image_url  # ← send back to iOS
-        }
+            # ── Step 3: Validate results ──────
+            validation = validate_results(
+                mobilenet_dish=mobilenet_hint,
+                mobilenet_confidence=mobilenet_confidence,
+                gemini_result=gemini_result
+            )
 
+            # ── Step 4: Upload to Cloudinary ──
+            image_url = ""
+            try:
+                from app.services.cloudinary_service import upload_image
+                image_url = await upload_image(
+                    image_bytes=image_bytes,
+                    user_id=user_id,
+                    dish_name=gemini_result.dish_name
+                )
+                print(f"✅ Image uploaded: {image_url}")
+            except Exception as e:
+                print(f"⚠️ Cloudinary failed (continuing): {e}")
+
+            # ── Step 5: Save to DB ────────────
+            await self.save_scan(
+                user_id=user_id,
+                gemini_result=gemini_result,
+                validation=validation,
+                mobilenet_hint=mobilenet_hint,
+                mobilenet_confidence=mobilenet_confidence,
+                image_url=image_url
+            )
+
+            # ── Step 6: Return result ─────────
+            return {
+                "type":       "scan_result",
+                "result":     gemini_result.to_dict(),
+                "validation": validation,
+                "image_url":  image_url
+            }
+
+        except Exception as e:
+            print(f"❌ Scan error: {e}")
+            return {
+                "type":    "scan_error",
+                "message": str(e)
+            }
+    
     async def save_scan(
         self,
         user_id: str,
