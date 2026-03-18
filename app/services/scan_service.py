@@ -94,7 +94,8 @@ class ScanService:
         gemini_result,
         validation: dict,
         mobilenet_hint: str,
-        mobilenet_confidence: float
+        mobilenet_confidence: float,
+        image_url: str = ""  # ← ADD HERE
     ):
         try:
             db = SessionLocal()
@@ -119,16 +120,17 @@ class ScanService:
                 tags                 = gemini_result.tags,
                 allergens            = gemini_result.allergens,
                 cooking_tip          = gemini_result.cooking_tip,
-                portion_size         = gemini_result.portion_size
+                portion_size         = gemini_result.portion_size,
+                image_url            = image_url  # ← ADD HERE
             )
             db.add(scan)
             db.commit()
-            print(f"Scan saved: {gemini_result.dish_name}")
+            print(f"✅ Scan saved: {gemini_result.dish_name}")
         except Exception as e:
-            print(f"Save error: {e}")
+            print(f"❌ Save error: {e}")
+            db.rollback()
         finally:
             db.close()
-
 
 # Singleton instance
 # Import this in websocket.py
