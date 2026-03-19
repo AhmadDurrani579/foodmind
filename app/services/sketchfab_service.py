@@ -403,7 +403,7 @@ async def _get_curated_model(
             size_mb     = len(model_bytes) / (1024 * 1024)
             print(f"✅ Curated model downloaded: {size_mb:.1f}MB")
 
-            if size_mb > 8:
+            if size_mb > 10:
                 print(f"⚠️ Too large: {size_mb:.1f}MB")
                 return None
 
