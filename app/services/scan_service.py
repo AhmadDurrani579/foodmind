@@ -5,91 +5,20 @@
 # app/services/scan_service.py
 #
 
+import asyncio
 import base64
 from app.services.gemini_service import analyse_food, validate_results
 from app.db.database import SessionLocal
 from app.db.models_scan import ScanDB
 from app.services.cloudinary_service import upload_image
-
-# ─────────────────────────────────────
-# MARK: — Segment Validator
-# Standalone function (not a method)
-# ─────────────────────────────────────
-def validate_segments(
-    segments: list,
-    mobilenet_hint: str
-) -> list:
-    """
-    Cross-validates SegFormer segments
-    against CoreML dish prediction.
-    Removes segments that don't make
-    sense for the detected dish.
-    """
-    if not segments:
-        return []
-
-    DISH_INGREDIENTS = {
-        "pizza":      ["cheese", "tomato", "dough", "pepper", "mushroom", "meat"],
-        "burger":     ["bun", "meat", "lettuce", "tomato", "cheese", "onion"],
-        "salad":      ["lettuce", "tomato", "cucumber", "carrot", "onion"],
-        "sushi":      ["rice", "fish", "seaweed", "salmon", "tuna", "avocado"],
-        "sandwich":   ["bread", "meat", "lettuce", "tomato", "cheese"],
-        "pasta":      ["pasta", "tomato", "meat", "cheese", "mushroom"],
-        "soup":       ["broth", "vegetable", "meat", "carrot", "onion"],
-        "waffle":     ["waffle", "syrup", "butter", "cream", "berry"],
-        "pancake":    ["pancake", "syrup", "butter", "cream", "berry"],
-        "cake":       ["cake", "cream", "chocolate", "berry", "sugar"],
-        "ice_cream":  ["cream", "chocolate", "berry", "cone", "vanilla"],
-        "samosa":     ["potato", "pastry", "pea", "spice"],
-        "hot_dog":    ["sausage", "bun", "mustard", "ketchup"],
-        "steak":      ["meat", "potato", "vegetable", "sauce"],
-        "chicken":    ["chicken", "vegetable", "sauce", "potato"],
-        "chocolate":  ["chocolate", "cream", "cake", "cocoa"],
-        "donut":      ["dough", "cream", "chocolate", "sugar"],
-        "apple_pie":  ["apple", "pastry", "sugar", "cream"],
-        "omelette":   ["egg", "cheese", "vegetable", "meat"],
-        "fish":       ["fish", "sauce", "vegetable", "lemon"],
-        "shrimp":     ["shrimp", "sauce", "vegetable", "rice"],
-    }
-
-    hint_lower = mobilenet_hint.lower().replace("_", " ")
-    matching_ingredients = []
-
-    for dish, ingredients in DISH_INGREDIENTS.items():
-        if dish in hint_lower or hint_lower in dish:
-            matching_ingredients = ingredients
-            break
-
-    # No match → return segments as is, let Gemini decide
-    if not matching_ingredients:
-        print(f"⚠️ No ingredient mapping for '{mobilenet_hint}' "
-              f"→ using raw segments")
-        return segments
-
-    # Filter segments matching expected ingredients
-    validated = [
-        seg for seg in segments
-        if any(
-            ing in seg["label"].lower()
-            for ing in matching_ingredients
-        )
-    ]
-
-    if not validated:
-        print(f"⚠️ No valid segments for '{mobilenet_hint}' "
-              f"→ skipping segments")
-        return []
-
-    print(f"✅ Validated {len(validated)}/{len(segments)} segments "
-          f"for '{mobilenet_hint}'")
-    return validated
+from app.services.yolo_service import detect_food, estimate_calories
 
 
-# ─────────────────────────────────────
-# MARK: — ScanService
-# ─────────────────────────────────────
 class ScanService:
 
+    # ─────────────────────────────────
+    # MARK: — Process Scan
+    # ─────────────────────────────────
     async def process_scan(
         self,
         image_base64: str,
@@ -100,26 +29,82 @@ class ScanService:
 
         try:
             if not image_base64:
-                return {"type": "scan_error", "message": "No image received"}
+                return {
+                    "type":    "scan_error",
+                    "message": "No image received"
+                }
 
             image_bytes = base64.b64decode(image_base64)
             print(f"📸 Image: {len(image_bytes)} bytes")
 
-            # ── Step 1: Gemini ────────────
-            gemini_result = await analyse_food(
-                image_bytes=image_bytes,
-                mobilenet_hint=mobilenet_hint,
-                mobilenet_confidence=mobilenet_confidence
+            # ── Step 1: YOLO + Gemini parallel ──
+            print("🔀 Running YOLO + Gemini in parallel...")
+
+            yolo_task = asyncio.create_task(
+                detect_food(image_bytes)
+            )
+            gemini_task = asyncio.create_task(
+                analyse_food(
+                    image_bytes=image_bytes,
+                    mobilenet_hint=mobilenet_hint,
+                    mobilenet_confidence=mobilenet_confidence
+                )
             )
 
-            # ── Step 2: Validate ──────────
+            yolo_result, gemini_result = await asyncio.gather(
+                yolo_task,
+                gemini_task,
+                return_exceptions=True
+            )
+
+            # ── Step 2: Handle YOLO ──────────
+            yolo_data = {}
+            if isinstance(yolo_result, Exception):
+                print(f"⚠️ YOLO failed: {yolo_result}")
+                yolo_data = {
+                    "detected":   False,
+                    "label":      "unknown",
+                    "confidence": 0.0,
+                    "bbox_norm":  []
+                }
+            else:
+                yolo_data = yolo_result
+                if yolo_data.get("detected"):
+                    print(f"🎯 YOLO: {yolo_data['label']} "
+                          f"({int(yolo_data['confidence'] * 100)}%)")
+
+            # ── Step 3: Handle Gemini ────────
+            used_fallback = False
+            if isinstance(gemini_result, Exception):
+                print(f"⚠️ Gemini failed → YOLO fallback")
+                gemini_result = self._yolo_fallback(
+                    yolo_data=yolo_data,
+                    mobilenet_hint=mobilenet_hint
+                )
+                used_fallback = True
+
+            # ── Step 4: Fusion confidence ────
+            final_confidence = gemini_result.confidence
+            if (not used_fallback and
+                yolo_data.get("detected") and
+                yolo_data.get("confidence", 0) > 0):
+
+                yolo_conf = int(yolo_data["confidence"] * 100)
+                final_confidence = (
+                    gemini_result.confidence + yolo_conf
+                ) // 2
+
+                print(f"🔀 Fusion: Gemini {gemini_result.confidence}% "
+                      f"+ YOLO {yolo_conf}% = {final_confidence}%")
+
+            # ── Step 5: Validate ─────────────
             validation = validate_results(
                 mobilenet_dish=mobilenet_hint,
                 mobilenet_confidence=mobilenet_confidence,
                 gemini_result=gemini_result
             )
 
-            # ── Step 3: Upload image ──────
+            # ── Step 6: Upload image ─────────
             image_url = ""
             try:
                 image_url = await upload_image(
@@ -130,7 +115,7 @@ class ScanService:
             except Exception as e:
                 print(f"⚠️ Cloudinary failed: {e}")
 
-            # ── Step 4: Save to DB ────────
+            # ── Step 7: Save to DB ───────────
             await self.save_scan(
                 user_id=user_id,
                 gemini_result=gemini_result,
@@ -140,18 +125,46 @@ class ScanService:
                 image_url=image_url
             )
 
-            # ── Step 5: Return ────────────
+            # ── Step 8: Return ───────────────
+            result_dict = gemini_result.to_dict()
+            result_dict["confidence"] = final_confidence
+
             return {
-                "type":       "scan_result",
-                "result":     gemini_result.to_dict(),
-                "validation": validation,
-                "image_url":  image_url
+                "type":          "scan_result",
+                "result":        result_dict,
+                "validation":    validation,
+                "yolo":          {
+                    "detected":   yolo_data.get("detected", False),
+                    "label":      yolo_data.get("label", ""),
+                    "confidence": yolo_data.get("confidence", 0.0),
+                    "bbox_norm":  yolo_data.get("bbox_norm", []),
+                },
+                "image_url":     image_url,
+                "used_fallback": used_fallback
             }
 
         except Exception as e:
             print(f"❌ Scan error: {e}")
-            return {"type": "scan_error", "message": str(e)}
-    
+            return {
+                "type":    "scan_error",
+                "message": str(e)
+            }
+
+    # ─────────────────────────────────
+    # MARK: — YOLO Fallback
+    # ─────────────────────────────────
+    def _yolo_fallback(self, yolo_data: dict, mobilenet_hint: str):
+        from app.services.gemini_service import _fallback_result
+        label     = yolo_data.get("label", mobilenet_hint)
+        result    = _fallback_result(label)
+        estimated = estimate_calories(label)
+        if estimated > 0:
+            result.calories = estimated
+        return result
+
+    # ─────────────────────────────────
+    # MARK: — Save Scan
+    # ─────────────────────────────────
     async def save_scan(
         self,
         user_id: str,
