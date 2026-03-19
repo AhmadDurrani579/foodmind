@@ -16,6 +16,9 @@ RUN pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cpu
 
 
+RUN pip install --no-cache-dir ultralytics
+
+
 # Verify torch + numpy work together
 RUN python -c "import torch; import numpy; print('Torch:', torch.__version__, 'NumPy:', numpy.__version__)"
 

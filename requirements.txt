@@ -32,6 +32,7 @@ pydantic-settings
 
 # ── AI / ML ───────────────────────────
 Pillow
+ultralytics
 
 # ── Gemini Flash ──────────────────────
 google-genai
