@@ -62,6 +62,7 @@ class ScanService:
                 mobilenet_confidence=mobilenet_confidence,
                 image_url=image_url
             )
+            print(f"📦 Returning segments: {segments}")
 
             # ── Step 6: Return ────────────
             return {
