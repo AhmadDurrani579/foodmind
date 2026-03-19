@@ -177,27 +177,7 @@ async def get_model_download_url(uid: str) -> dict | None:
 # Search + Get Download URL in one call
 # ─────────────────────────────────────
 
-def is_food_model(model_name: str, dish_name: str) -> bool:
-    name_lower  = model_name.lower()
-    dish_lower  = dish_name.lower()
 
-    # Must contain food-related word
-    FOOD_WORDS = [
-        "pizza", "burger", "sushi", "food", "meal",
-        "dish", "sandwich", "cake", "donut", "chicken",
-        "pasta", "salad", "bread", "fruit", "vegetable",
-        "meat", "fish", "rice", "noodle", "soup", "waffle",
-        "taco", "steak", "dessert", "snack", "cook"
-    ]
-
-    # Check if dish name word appears in model name
-    dish_words = dish_lower.split()
-    for word in dish_words:
-        if len(word) > 3 and word in name_lower:
-            return True
-
-    # Check general food words
-    return any(fw in name_lower for fw in FOOD_WORDS)
 
 
 
@@ -231,7 +211,6 @@ async def get_3d_model_for_dish(dish_name: str) -> dict | None:
                     "count":        20,
                     "sort_by":      "-likeCount",
                     "categories":   "food-drink",
-                    "tags":         "food",
                 },
                 headers={
                     "Authorization": f"Token {SKETCHFAB_TOKEN}"
@@ -261,13 +240,25 @@ async def get_3d_model_for_dish(dish_name: str) -> dict | None:
                 if any(kw in name_lower for kw in NON_FOOD_KEYWORDS):
                     return False
 
-                # STRICT: dish word must appear in model name
+                # Check dish words in model name
                 dish_words = [
                     w for w in dish.lower().split()
                     if len(w) > 3
                 ]
-                return any(w in name_lower for w in dish_words)
+                if any(w in name_lower for w in dish_words):
+                    return True
 
+                # ← ADD BACK general food check
+                # but only for common food words
+                COMMON_FOOD = [
+                    "pizza", "burger", "sushi", "food", "meal",
+                    "sandwich", "cake", "donut", "chicken", "pasta",
+                    "salad", "bread", "rice", "noodle", "soup",
+                    "waffle", "taco", "steak", "fish", "seafood",
+                    "japanese", "italian", "chinese", "asian",
+                    "plate", "bowl", "dish", "roll", "slice"
+                ]
+                return any(fw in name_lower for fw in COMMON_FOOD)
             food_results = [
                 r for r in results
                 if is_food_model(r["name"], dish_name)
