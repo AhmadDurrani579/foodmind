@@ -30,7 +30,8 @@ pydantic[email]
 pydantic-settings
 
 # ── AI / ML ───────────────────────────
-transformers
+transformers>=4.35.0   # ← pin version
+accelerate             # ← add this
 Pillow
 
 # ── Gemini Flash ──────────────────────
@@ -47,6 +48,5 @@ numpy
 # ── Caching ───────────────────────────
 redis
 
-# ── For Image Storage ───────────────────────────
-
+# ── Image Storage ─────────────────────
 cloudinary
