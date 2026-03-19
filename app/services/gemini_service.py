@@ -21,9 +21,10 @@ client = genai.Client(
 )
 
 MODELS = [
-    "gemini-2.5-flash",   # primary
-    "gemini-2.0-flash",   # fallback 1
-    "gemini-1.5-flash",   # fallback 2
+    "gemini-2.5-flash",        # primary
+    "gemini-2.0-flash",        # fallback 1
+    "gemini-1.5-flash-latest", # fallback 2 ← fix name
+    "gemini-1.0-pro-vision",   # fallback 3
 ]
 
 
