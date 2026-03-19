@@ -15,10 +15,6 @@ RUN pip install --no-cache-dir \
     torchvision==0.16.0+cpu \
     --extra-index-url https://download.pytorch.org/whl/cpu
 
-# transformers 4.40 works with torch 2.1
-RUN pip install --no-cache-dir \
-    "transformers==4.40.0" \
-    accelerate
 
 # Verify torch + numpy work together
 RUN python -c "import torch; import numpy; print('Torch:', torch.__version__, 'NumPy:', numpy.__version__)"

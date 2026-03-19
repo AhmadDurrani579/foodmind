@@ -31,8 +31,6 @@ pydantic[email]
 pydantic-settings
 
 # ── AI / ML ───────────────────────────
-transformers==4.40.0
-accelerate
 Pillow
 
 # ── Gemini Flash ──────────────────────

@@ -10,7 +10,6 @@ from app.services.gemini_service import analyse_food, validate_results
 from app.db.database import SessionLocal
 from app.db.models_scan import ScanDB
 from app.services.cloudinary_service import upload_image
-from app.services.segformer_service import segment_food, segments_to_description
 
 # ─────────────────────────────────────
 # MARK: — Segment Validator
@@ -101,43 +100,26 @@ class ScanService:
 
         try:
             if not image_base64:
-                return {
-                    "type":    "scan_error",
-                    "message": "No image received"
-                }
+                return {"type": "scan_error", "message": "No image received"}
 
             image_bytes = base64.b64decode(image_base64)
             print(f"📸 Image: {len(image_bytes)} bytes")
 
-            # ── Step 1: SegFormer ─────────
-            segments = await segment_food(image_bytes)
-
-            # ── Step 2: Validate segments ──
-            validated_segments = validate_segments(
-                segments=segments,
-                mobilenet_hint=mobilenet_hint
-            )
-            segment_description = segments_to_description(
-                validated_segments
-            )
-            print(f"🔬 Segments: {segment_description}")
-
-            # ── Step 3: Gemini ────────────
+            # ── Step 1: Gemini ────────────
             gemini_result = await analyse_food(
                 image_bytes=image_bytes,
                 mobilenet_hint=mobilenet_hint,
-                mobilenet_confidence=mobilenet_confidence,
-                segment_description=segment_description
+                mobilenet_confidence=mobilenet_confidence
             )
 
-            # ── Step 4: Validate results ──
+            # ── Step 2: Validate ──────────
             validation = validate_results(
                 mobilenet_dish=mobilenet_hint,
                 mobilenet_confidence=mobilenet_confidence,
                 gemini_result=gemini_result
             )
 
-            # ── Step 5: Upload image ──────
+            # ── Step 3: Upload image ──────
             image_url = ""
             try:
                 image_url = await upload_image(
@@ -148,7 +130,7 @@ class ScanService:
             except Exception as e:
                 print(f"⚠️ Cloudinary failed: {e}")
 
-            # ── Step 6: Save to DB ────────
+            # ── Step 4: Save to DB ────────
             await self.save_scan(
                 user_id=user_id,
                 gemini_result=gemini_result,
@@ -158,24 +140,18 @@ class ScanService:
                 image_url=image_url
             )
 
-            print(f"📦 Returning {len(validated_segments)} segments")
-
-            # ── Step 7: Return ────────────
+            # ── Step 5: Return ────────────
             return {
                 "type":       "scan_result",
                 "result":     gemini_result.to_dict(),
                 "validation": validation,
-                "segments":   validated_segments,
                 "image_url":  image_url
             }
 
         except Exception as e:
             print(f"❌ Scan error: {e}")
-            return {
-                "type":    "scan_error",
-                "message": str(e)
-            }
-
+            return {"type": "scan_error", "message": str(e)}
+    
     async def save_scan(
         self,
         user_id: str,

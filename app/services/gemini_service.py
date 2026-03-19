@@ -61,6 +61,13 @@ that this might be: {mobilenet_hint} (confidence: {mobilenet_confidence}%)
 Use the image as your primary source.
 The hint is just a suggestion — trust your own analysis.
 
+IMPORTANT: For each ingredient, carefully look at the image
+and identify WHERE in the image that ingredient appears.
+Use these position values only:
+top-left, top-center, top-right,
+center-left, center, center-right,
+bottom-left, bottom-center, bottom-right
+
 Return ONLY a valid JSON object.
 No markdown. No explanation. No extra text.
 Just the raw JSON.
@@ -81,13 +88,22 @@ Just the raw JSON.
       "name": "Spaghetti pasta",
       "calories": 280,
       "grams": 200,
-      "emoji": "🍝"
+      "emoji": "🍝",
+      "position": "center"
     }},
     {{
       "name": "Beef mince",
       "calories": 190,
       "grams": 150,
-      "emoji": "🥩"
+      "emoji": "🥩",
+      "position": "top-center"
+    }},
+    {{
+      "name": "Tomato sauce",
+      "calories": 60,
+      "grams": 100,
+      "emoji": "🍅",
+      "position": "center-left"
     }}
   ],
   "recipe_steps": [
@@ -109,7 +125,6 @@ Just the raw JSON.
   "allergens": ["Gluten", "Dairy"]
 }}
 """
-
 # ─────────────────────────────────────
 # MARK: — Analysis Result Model
 # ─────────────────────────────────────
