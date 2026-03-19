@@ -2,15 +2,16 @@
 
 # ─────────────────────────────────────
 # FoodMind Backend — requirements.txt
-# torch + torchvision in Dockerfile
 # ─────────────────────────────────────
+
+# ── NumPy pinned for torch compatibility ──
+numpy<2.0              # ← ADD THIS FIRST
 
 # ── Web Framework ─────────────────────
 fastapi
 uvicorn[standard]
 python-multipart
 python-dotenv
-torch
 
 # ── WebSocket ─────────────────────────
 websockets
@@ -30,8 +31,8 @@ pydantic[email]
 pydantic-settings
 
 # ── AI / ML ───────────────────────────
-transformers>=4.35.0   # ← pin version
-accelerate             # ← add this
+transformers==4.40.0
+accelerate
 Pillow
 
 # ── Gemini Flash ──────────────────────
@@ -43,7 +44,6 @@ httpx
 
 # ── Image Processing ──────────────────
 opencv-python-headless
-numpy
 
 # ── Caching ───────────────────────────
 redis
