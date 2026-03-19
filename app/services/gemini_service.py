@@ -121,7 +121,8 @@ class FoodAnalysisResult:
             "recipe_steps": self.recipe_steps,
             "cooking_tip":  self.cooking_tip,
             "tags":         self.tags,
-            "allergens":    self.allergens
+            "allergens":    self.allergens,
+            "image_url":      ""  # Placeholder for image URL
         }
 
 
@@ -131,14 +132,22 @@ class FoodAnalysisResult:
 async def analyse_food(
     image_bytes: bytes,
     mobilenet_hint: str = "unknown",
-    mobilenet_confidence: float = 0.0
+    mobilenet_confidence: float = 0.0,
+    segment_description: str = ""  # ← new
 ) -> FoodAnalysisResult:
 
     try:
+        # ── Build prompt with segment context ──
+        segment_context = (
+            f"\n\nIngredient analysis from computer vision: {segment_description}"
+            if segment_description
+            else ""
+        )
+
         prompt = FOOD_ANALYSIS_PROMPT.format(
             mobilenet_hint=mobilenet_hint,
             mobilenet_confidence=int(mobilenet_confidence * 100)
-        )
+        ) + segment_context  # ← append segments to existing prompt
 
         response = client.models.generate_content(
             model=MODEL,

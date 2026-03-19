@@ -2,14 +2,13 @@
 # scan_service.py
 # FoodMind Backend
 #
-# app/services/scan_service.py
-#
 
 import base64
 from app.services.gemini_service import analyse_food, validate_results
 from app.db.database import SessionLocal
 from app.db.models_scan import ScanDB
 from app.services.cloudinary_service import upload_image 
+from app.services.segformer_service import segment_food, segments_to_description
 
 class ScanService:
 
@@ -18,40 +17,32 @@ class ScanService:
     # Main orchestrator
     # Called by websocket.py
     # ─────────────────────────────────
-    async def process_scan(
-        self,
-        image_base64: str,
-        mobilenet_hint: str,
-        mobilenet_confidence: float,
-        user_id: str
-    ) -> dict:
-
+    async def process_scan(self, image_base64, mobilenet_hint, mobilenet_confidence, user_id):
         try:
-            # ── Step 1: Validate image ────────
-            if not image_base64:
-                return {
-                    "type":    "scan_error",
-                    "message": "No image received"
-                }
-
             image_bytes = base64.b64decode(image_base64)
             print(f"📸 Image: {len(image_bytes)} bytes")
 
-            # ── Step 2: Gemini analysis ───────
+            # ── Step 1: SegFormer ─────────
+            segments = await segment_food(image_bytes)
+            segment_description = segments_to_description(segments)
+            print(f"🔬 Segments: {segment_description}")
+
+            # ── Step 2: Gemini (enhanced) ─
             gemini_result = await analyse_food(
                 image_bytes=image_bytes,
                 mobilenet_hint=mobilenet_hint,
-                mobilenet_confidence=mobilenet_confidence
+                mobilenet_confidence=mobilenet_confidence,
+                segment_description=segment_description  # ← pass to Gemini
             )
 
-            # ── Step 3: Validate results ──────
+            # ── Step 3: Validate ──────────
             validation = validate_results(
                 mobilenet_dish=mobilenet_hint,
                 mobilenet_confidence=mobilenet_confidence,
                 gemini_result=gemini_result
             )
 
-            # ── Step 4: Upload to Cloudinary ──
+            # ── Step 4: Upload image ──────
             image_url = ""
             try:
                 image_url = await upload_image(
@@ -59,11 +50,10 @@ class ScanService:
                     user_id=user_id,
                     dish_name=gemini_result.dish_name
                 )
-                print(f"✅ Image uploaded: {image_url}")
             except Exception as e:
-                print(f"⚠️ Cloudinary failed (continuing): {e}")
+                print(f"⚠️ Cloudinary failed: {e}")
 
-            # ── Step 5: Save to DB ────────────
+            # ── Step 5: Save to DB ────────
             await self.save_scan(
                 user_id=user_id,
                 gemini_result=gemini_result,
@@ -73,20 +63,18 @@ class ScanService:
                 image_url=image_url
             )
 
-            # ── Step 6: Return result ─────────
+            # ── Step 6: Return ────────────
             return {
                 "type":       "scan_result",
                 "result":     gemini_result.to_dict(),
                 "validation": validation,
+                "segments":   segments,   # ← for ARKit later
                 "image_url":  image_url
             }
 
         except Exception as e:
             print(f"❌ Scan error: {e}")
-            return {
-                "type":    "scan_error",
-                "message": str(e)
-            }
+            return {"type": "scan_error", "message": str(e)}
     
     async def save_scan(
         self,
