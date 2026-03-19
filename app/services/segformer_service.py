@@ -81,7 +81,7 @@ async def segment_food(image_bytes: bytes) -> list[dict]:
             pixel_count = mask.sum()
             area        = pixel_count / total_px
 
-            if area < 0.05:
+            if area < 0.10:
                 continue
 
             if label_name in seen_labels:

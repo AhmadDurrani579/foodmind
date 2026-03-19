@@ -165,9 +165,13 @@ async def analyse_food(
     import asyncio
 
     segment_context = (
-        f"\n\nIngredient analysis from computer vision: {segment_description}"
-        if segment_description else ""
+        f"\n\nComputer vision ingredient hints "
+        f"(use as supporting reference, "
+        f"trust your visual analysis more): {segment_description}"
+        if segment_description
+        else ""
     )
+
 
     prompt = FOOD_ANALYSIS_PROMPT.format(
         mobilenet_hint=mobilenet_hint,
