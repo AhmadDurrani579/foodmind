@@ -26,6 +26,7 @@ MODELS = [
     "gemini-1.5-flash",   # fallback 2
 ]
 
+
 # ─────────────────────────────────────
 # MARK: — Prompt
 # ─────────────────────────────────────
@@ -133,85 +134,84 @@ class FoodAnalysisResult:
 # ─────────────────────────────────────
 # MARK: — Main Analysis Function
 # ─────────────────────────────────────
-    async def analyse_food(
-        image_bytes: bytes,
-        mobilenet_hint: str = "unknown",
-        mobilenet_confidence: float = 0.0,
-        segment_description: str = ""
-    ) -> "FoodAnalysisResult":
+async def analyse_food(
+    image_bytes: bytes,
+    mobilenet_hint: str = "unknown",
+    mobilenet_confidence: float = 0.0,
+    segment_description: str = ""
+) -> FoodAnalysisResult:
 
-        import asyncio
+    import asyncio
 
-        segment_context = (
-            f"\n\nIngredient analysis from computer vision: {segment_description}"
-            if segment_description
-            else ""
-        )
+    segment_context = (
+        f"\n\nIngredient analysis from computer vision: {segment_description}"
+        if segment_description
+        else ""
+    )
 
-        prompt = FOOD_ANALYSIS_PROMPT.format(
-            mobilenet_hint=mobilenet_hint,
-            mobilenet_confidence=int(mobilenet_confidence * 100)
-        ) + segment_context
+    prompt = FOOD_ANALYSIS_PROMPT.format(
+        mobilenet_hint=mobilenet_hint,
+        mobilenet_confidence=int(mobilenet_confidence * 100)
+    ) + segment_context
 
-        # ── Try each model in order ────────
-        for model_name in MODELS:
-            for attempt in range(2):  # 2 attempts per model
-                try:
-                    print(f"🤖 Trying {model_name} (attempt {attempt + 1})...")
+    # ── Try each model in order ────────
+    for model_name in MODELS:
+        for attempt in range(2):  # 2 attempts per model
+            try:
+                print(f"🤖 Trying {model_name} (attempt {attempt + 1})...")
 
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=[
-                            types.Part.from_bytes(
-                                data=image_bytes,
-                                mime_type="image/jpeg"
-                            ),
-                            prompt
-                        ]
-                    )
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[
+                        types.Part.from_bytes(
+                            data=image_bytes,
+                            mime_type="image/jpeg"
+                        ),
+                        prompt
+                    ]
+                )
 
-                    raw_text = response.text.strip()
+                raw_text = response.text.strip()
 
-                    if raw_text.startswith("```"):
-                        raw_text = raw_text.split("```")[1]
-                        if raw_text.startswith("json"):
-                            raw_text = raw_text[4:]
-                        raw_text = raw_text.strip()
+                if raw_text.startswith("```"):
+                    raw_text = raw_text.split("```")[1]
+                    if raw_text.startswith("json"):
+                        raw_text = raw_text[4:]
+                    raw_text = raw_text.strip()
 
-                    data   = json.loads(raw_text)
-                    result = FoodAnalysisResult(data)
+                data   = json.loads(raw_text)
+                result = FoodAnalysisResult(data)
 
-                    print(f"✅ Gemini ({model_name}): {result.dish_name} "
-                        f"({result.calories} kcal, {result.confidence}%)")
+                print(f"✅ Gemini ({model_name}): {result.dish_name} "
+                      f"({result.calories} kcal, {result.confidence}%)")
 
-                    return result
+                return result
 
-                except json.JSONDecodeError as e:
-                    print(f"❌ JSON parse error: {e}")
-                    return _fallback_result(mobilenet_hint)
+            except json.JSONDecodeError as e:
+                print(f"❌ JSON parse error: {e}")
+                return _fallback_result(mobilenet_hint)
 
-                except Exception as e:
-                    error_str = str(e)
+            except Exception as e:
+                error_str = str(e)
 
-                    # ── Rate limit → switch model ──
-                    if "429" in error_str:
-                        print(f"⚠️ {model_name} rate limited → trying next model")
-                        break  # break attempt loop → try next model
+                # ── Rate limit → switch model ──
+                if "429" in error_str:
+                    print(f"⚠️ {model_name} rate limited → trying next model")
+                    break  # break attempt loop → try next model
 
-                    # ── Overloaded → wait and retry ──
-                    if "503" in error_str and attempt < 1:
-                        print(f"⚠️ {model_name} overloaded → retrying in 5s...")
-                        await asyncio.sleep(5)
-                        continue
+                # ── Overloaded → wait and retry ──
+                if "503" in error_str and attempt < 1:
+                    print(f"⚠️ {model_name} overloaded → retrying in 5s...")
+                    await asyncio.sleep(5)
+                    continue
 
-                    # ── Other error → try next model ──
-                    print(f"❌ {model_name} error: {e} → trying next model")
-                    break
+                # ── Other error → try next model ──
+                print(f"❌ {model_name} error: {e} → trying next model")
+                break
 
-        # ── All models exhausted ───────────
-        print("❌ All models failed → using fallback")
-        return _fallback_result(mobilenet_hint)
-
+    # ── All models exhausted ───────────
+    print("❌ All models failed → using fallback")
+    return _fallback_result(mobilenet_hint)
 
 # ─────────────────────────────────────
 # MARK: — Validation Layer
