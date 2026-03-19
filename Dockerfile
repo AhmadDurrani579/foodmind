@@ -37,13 +37,8 @@ COPY . .
 # Create runtime directories
 RUN mkdir -p /app/uploads /app/cache
 
-# Pre-download SegFormer model during build
-RUN python -c "\
-import torch; \
-from transformers import SegformerImageProcessor, SegformerForSemanticSegmentation; \
-SegformerImageProcessor.from_pretrained('LightDestory/segformer-b0-finetuned-segments-food-oct-24v2'); \
-SegformerForSemanticSegmentation.from_pretrained('LightDestory/segformer-b0-finetuned-segments-food-oct-24v2'); \
-print('SegFormer model cached successfully')"
+# ← REMOVED pre-download step
+# Model downloads on first scan instead
 
 # HuggingFace Spaces uses port 7860
 EXPOSE 7860
