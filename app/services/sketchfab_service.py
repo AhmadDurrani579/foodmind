@@ -176,34 +176,49 @@ async def get_model_download_url(uid: str) -> dict | None:
 # MARK: — Main Function
 # Search + Get Download URL in one call
 # ─────────────────────────────────────
+
+def is_food_model(model_name: str, dish_name: str) -> bool:
+    name_lower  = model_name.lower()
+    dish_lower  = dish_name.lower()
+
+    # Must contain food-related word
+    FOOD_WORDS = [
+        "pizza", "burger", "sushi", "food", "meal",
+        "dish", "sandwich", "cake", "donut", "chicken",
+        "pasta", "salad", "bread", "fruit", "vegetable",
+        "meat", "fish", "rice", "noodle", "soup", "waffle",
+        "taco", "steak", "dessert", "snack", "cook"
+    ]
+
+    # Check if dish name word appears in model name
+    dish_words = dish_lower.split()
+    for word in dish_words:
+        if len(word) > 3 and word in name_lower:
+            return True
+
+    # Check general food words
+    return any(fw in name_lower for fw in FOOD_WORDS)
+
+
+
 async def get_3d_model_for_dish(dish_name: str) -> dict | None:
     """
-    Complete flow:
-    1. Search Sketchfab for food model
-    2. Get temporary download URL
-    3. Download model bytes
-    4. Upload to Cloudinary (permanent)
-    5. Return permanent URL + model info
- 
-    Returns:
-    {
-        "url":     "https://cloudinary.com/...",
-        "format":  "usdz" or "glb",
-        "name":    "Pizza Model",
-        "author":  "sketchfab_user",
-        "license": "CC Attribution"
-    }
+    Hybrid approach:
+    1. Dynamic Sketchfab search
+    2. Validate result is actual food model
+    3. Download + upload to Cloudinary
+    4. Fallback to curated model if search fails
     """
     if not SKETCHFAB_TOKEN:
         print("⚠️ No Sketchfab token configured")
         return None
- 
+
     query = get_search_query(dish_name)
     print(f"🔍 Sketchfab search: '{query}' for '{dish_name}'")
- 
+
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
- 
+
             # ── Step 1: Search models ─────────
             response = await client.get(
                 f"{SKETCHFAB_API}/models",
@@ -211,95 +226,133 @@ async def get_3d_model_for_dish(dish_name: str) -> dict | None:
                     "q":            query,
                     "downloadable": "true",
                     "license":      "by",
-                    "count":        10,
+                    "count":        20,             # ← more results
                     "sort_by":      "-likeCount",
-                    "categories":   "food-drink",
+                    "categories":   "food-drink",   # ← food only
+                    "tags":         "food",          # ← food tag
                 },
                 headers={
                     "Authorization": f"Token {SKETCHFAB_TOKEN}"
                 }
             )
- 
+
             if response.status_code != 200:
                 print(f"❌ Sketchfab search failed: {response.status_code}")
-                return None
- 
+                return await _get_curated_model(dish_name, client)
+
             results = response.json().get("results", [])
 
+            # ── Step 2: Filter non-food models ──
             NON_FOOD_KEYWORDS = [
                 "girl", "boy", "character", "human", "person",
                 "robot", "car", "building", "weapon", "gun",
-                "scifi", "sci-fi", "anime", "vehicle", "sword"
-            ]
-            results = [
-                r for r in results
-                if not any(
-                    kw in r["name"].lower()
-                    for kw in NON_FOOD_KEYWORDS
-                )
+                "scifi", "sci-fi", "anime", "vehicle", "sword",
+                "tree", "house", "room", "interior", "exterior",
+                "animal", "cat", "dog", "bird", "monster",
+                "game", "asset", "pack", "collection", "scene"
             ]
 
-            if not results:
-                print(f"⚠️ No models found for '{query}'")
-                return None
- 
-            # ── Step 2: Find downloadable model ──
-            for candidate in results:
+            FOOD_KEYWORDS = [
+                "pizza", "burger", "sushi", "food", "meal",
+                "dish", "sandwich", "cake", "donut", "chicken",
+                "pasta", "salad", "bread", "fruit", "vegetable",
+                "meat", "fish", "rice", "noodle", "soup", "waffle",
+                "taco", "steak", "dessert", "snack", "cook",
+                "kitchen", "plate", "bowl", "slice", "piece",
+                "cheese", "tomato", "sauce", "dough", "baked",
+                "fried", "grilled", "roasted", "fresh", "hot",
+                "cold", "sweet", "spicy", "crispy", "juicy"
+            ]
+
+            def is_food_model(name: str, dish: str) -> bool:
+                name_lower  = name.lower()
+                dish_lower  = dish.lower()
+
+                # Reject if contains non-food keyword
+                if any(kw in name_lower for kw in NON_FOOD_KEYWORDS):
+                    return False
+
+                # Accept if dish name word appears in model name
+                dish_words = [w for w in dish_lower.split() if len(w) > 3]
+                if any(w in name_lower for w in dish_words):
+                    return True
+
+                # Accept if contains food keyword
+                if any(fw in name_lower for fw in FOOD_KEYWORDS):
+                    return True
+
+                return False
+
+            # Filter to food-only models
+            food_results = [
+                r for r in results
+                if is_food_model(r["name"], dish_name)
+            ]
+
+            print(f"📊 {len(results)} total → {len(food_results)} food models")
+
+            # If no food models found → use curated fallback
+            if not food_results:
+                print(f"⚠️ No food models found → using curated fallback")
+                return await _get_curated_model(dish_name, client)
+
+            # ── Step 3: Find downloadable + right size ──
+            for candidate in food_results:
                 uid  = candidate["uid"]
                 name = candidate["name"]
- 
-                # Get temp download URL
+
+                print(f"🔎 Trying: {name}")
+
                 download = await get_model_download_url(uid)
                 if not download:
-                    await asyncio.sleep(0.3)
+                    await asyncio.sleep(0.2)
                     continue
- 
+
                 temp_url = download["url"]
                 fmt      = download["format"]
- 
-                print(f"⬇️ Downloading {fmt} model: {name}...")
- 
-                # ── Step 3: Download model bytes ──
+
+                print(f"⬇️ Downloading {fmt}: {name}...")
+
+                # ── Step 4: Download model ────────
                 try:
                     model_response = await client.get(
                         temp_url,
                         timeout=30.0,
                         follow_redirects=True
                     )
- 
+
                     if model_response.status_code != 200:
-                        print(f" Model download failed: {model_response.status_code}")
-                        await asyncio.sleep(0.3)
+                        await asyncio.sleep(0.2)
                         continue
- 
+
                     model_bytes = model_response.content
                     size_mb     = len(model_bytes) / (1024 * 1024)
-                    print(f"✅ Downloaded {size_mb:.1f}MB {fmt} model")
- 
-                    # Skip models over 30MB (too slow for mobile)
+                    print(f"✅ Downloaded {size_mb:.1f}MB")
+
+                    # Skip if too large for Cloudinary free tier
                     if size_mb > 8:
-                        print(f" Model too large ({size_mb:.1f}MB) → skipping")
-                        await asyncio.sleep(0.3)
+                        print(f"⚠️ Too large ({size_mb:.1f}MB) → skipping")
+                        await asyncio.sleep(0.2)
                         continue
- 
+
                 except Exception as e:
-                    print(f" Download error: {e}")
-                    await asyncio.sleep(0.3)
+                    print(f"❌ Download error: {e}")
+                    await asyncio.sleep(0.2)
                     continue
- 
-                # ── Step 4: Upload to Cloudinary ──
+
+                # ── Step 5: Upload to Cloudinary ──
                 permanent_url = await _upload_model_to_cloudinary(
                     model_bytes=model_bytes,
                     dish_name=dish_name,
                     fmt=fmt
                 )
- 
+
                 if not permanent_url:
-                    print("⚠️ Cloudinary upload failed → using temp URL")
-                    permanent_url = temp_url  # fallback to temp
- 
-                print(f"🎯 3D model ready: {name} → {permanent_url[:60]}...")
- 
+                    await asyncio.sleep(0.2)
+                    continue  # try next model
+
+                print(f"🎯 3D model ready: {name}")
+
                 return {
                     "url":     permanent_url,
                     "format":  fmt,
@@ -308,11 +361,99 @@ async def get_3d_model_for_dish(dish_name: str) -> dict | None:
                     "license": candidate.get("license", {}).get("label", "CC Attribution"),
                     "uid":     uid
                 }
- 
+
+            # All food models failed → curated fallback
+            print("⚠️ All dynamic models failed → curated fallback")
+            return await _get_curated_model(dish_name, client)
+
     except Exception as e:
-        print(f" get_3d_model_for_dish error: {e}")
- 
+        print(f"❌ get_3d_model_for_dish error: {e}")
+
     return None
+
+
+# ─────────────────────────────────────
+# MARK: — Curated Fallback Models
+# Known good food model UIDs
+# Add more as you find them on Sketchfab
+# ─────────────────────────────────────
+CURATED_MODEL_UIDS = {
+    "pizza":     "d0f5e7d67a4b4b8a9c0e1f2a3b4c5d6e",  # replace with real UIDs
+    "burger":    "18e59d7dbd2243c69f469e0f056f44c4",
+    "sushi":     "",
+    "sandwich":  "",
+    "cake":      "",
+    "salad":     "",
+    "chicken":   "",
+    "pasta":     "",
+    "donut":     "",
+    "waffle":    "",
+}
+
+async def _get_curated_model(
+    dish_name: str,
+    client: httpx.AsyncClient
+) -> dict | None:
+    """
+    Returns a known good model for the dish.
+    Uses pre-verified Sketchfab UIDs.
+    """
+    dish_lower = dish_name.lower()
+
+    # Find matching curated model
+    uid = None
+    for key, model_uid in CURATED_MODEL_UIDS.items():
+        if key in dish_lower and model_uid:
+            uid = model_uid
+            break
+
+    if not uid:
+        print(f"⚠️ No curated model for '{dish_name}'")
+        return None
+
+    print(f"📦 Using curated model for '{dish_name}'")
+
+    download = await get_model_download_url(uid)
+    if not download:
+        return None
+
+    try:
+        model_response = await client.get(
+            download["url"],
+            timeout=30.0,
+            follow_redirects=True
+        )
+
+        if model_response.status_code != 200:
+            return None
+
+        model_bytes = model_response.content
+        size_mb     = len(model_bytes) / (1024 * 1024)
+
+        if size_mb > 8:
+            return None
+
+        permanent_url = await _upload_model_to_cloudinary(
+            model_bytes=model_bytes,
+            dish_name=dish_name,
+            fmt=download["format"]
+        )
+
+        if permanent_url:
+            return {
+                "url":     permanent_url,
+                "format":  download["format"],
+                "name":    f"{dish_name} 3D Model",
+                "author":  "sketchfab",
+                "license": "CC Attribution",
+                "uid":     uid
+            }
+
+    except Exception as e:
+        print(f"❌ Curated model error: {e}")
+
+    return None
+
 
 # ─────────────────────────────────────
 # MARK: — Upload Model To Cloudinary
