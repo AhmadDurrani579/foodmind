@@ -13,8 +13,19 @@ from app.db.models_scan import ScanDB
 from app.services.cloudinary_service import upload_image
 from app.services.yolo_service import detect_food, estimate_calories
 
+FOOD_LABELS = [
+                "pizza", "burger", "hot dog", "sandwich",
+                "cake", "donut", "apple", "banana", "orange",
+                "broccoli", "carrot", "bowl", "food", "plate",
+                "sushi", "pasta", "salad", "chicken", "steak",
+                "waffle", "pancake", "soup", "rice", "bread",
+                "fish", "shrimp", "taco", "burrito", "noodles",
+                "curry", "ice cream", "fries", "kebab", "dumpling"
+        ]
+
 
 class ScanService:
+
 
     # ─────────────────────────────────
     # MARK: — Process Scan
@@ -84,18 +95,22 @@ class ScanService:
                 used_fallback = True
 
             # ── Step 4: Fusion confidence ────
-            final_confidence = gemini_result.confidence
+
             if (not used_fallback and
                 yolo_data.get("detected") and
-                yolo_data.get("confidence", 0) > 0):
+                yolo_data.get("confidence", 0) > 0 and
+                any(food in yolo_data.get("label", "").lower()
+                    for food in FOOD_LABELS)):  # ← only fuse for food
 
                 yolo_conf = int(yolo_data["confidence"] * 100)
-                final_confidence = (
-                    gemini_result.confidence + yolo_conf
-                ) // 2
-
+                final_confidence = (gemini_result.confidence + yolo_conf) // 2
                 print(f"🔀 Fusion: Gemini {gemini_result.confidence}% "
-                      f"+ YOLO {yolo_conf}% = {final_confidence}%")
+                    f"+ YOLO {yolo_conf}% = {final_confidence}%")
+            else:
+                # YOLO didn't detect food → use Gemini confidence only
+                final_confidence = gemini_result.confidence
+                print(f"ℹ️ YOLO non-food detection → using Gemini confidence only")
+
 
             # ── Step 5: Validate ─────────────
             validation = validate_results(
