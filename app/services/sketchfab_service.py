@@ -211,8 +211,9 @@ async def get_3d_model_for_dish(dish_name: str) -> dict | None:
                     "q":            query,
                     "downloadable": "true",
                     "license":      "by",
-                    "count":        5,
+                    "count":        10,
                     "sort_by":      "-likeCount",
+                    "categories":   "food-drink",
                 },
                 headers={
                     "Authorization": f"Token {SKETCHFAB_TOKEN}"
@@ -224,6 +225,20 @@ async def get_3d_model_for_dish(dish_name: str) -> dict | None:
                 return None
  
             results = response.json().get("results", [])
+
+            NON_FOOD_KEYWORDS = [
+                "girl", "boy", "character", "human", "person",
+                "robot", "car", "building", "weapon", "gun",
+                "scifi", "sci-fi", "anime", "vehicle", "sword"
+            ]
+            results = [
+                r for r in results
+                if not any(
+                    kw in r["name"].lower()
+                    for kw in NON_FOOD_KEYWORDS
+                )
+            ]
+
             if not results:
                 print(f"⚠️ No models found for '{query}'")
                 return None
@@ -262,7 +277,7 @@ async def get_3d_model_for_dish(dish_name: str) -> dict | None:
                     print(f"✅ Downloaded {size_mb:.1f}MB {fmt} model")
  
                     # Skip models over 30MB (too slow for mobile)
-                    if size_mb > 30:
+                    if size_mb > 8:
                         print(f" Model too large ({size_mb:.1f}MB) → skipping")
                         await asyncio.sleep(0.3)
                         continue
