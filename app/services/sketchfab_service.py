@@ -229,7 +229,9 @@ async def get_3d_model_for_dish(dish_name: str) -> dict | None:
                 "scifi", "sci-fi", "anime", "vehicle", "sword",
                 "tree", "house", "room", "interior", "exterior",
                 "animal", "cat", "dog", "bird", "monster",
-                "game", "asset", "pack", "collection", "scene"
+                "game", "asset", "pack", "collection", "scene",
+                "restaurant", "kitchen", "store", "shop",
+                "market", "cafe", "bar", "diner"
             ]
 
             # ── STRICT food validation ────────
