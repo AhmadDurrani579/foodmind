@@ -133,7 +133,7 @@ class ScanService:
             try:
                 model_3d = await asyncio.wait_for(
                     get_3d_model_for_dish(gemini_result.dish_name),
-                    timeout=15.0  # ← max 15 seconds
+                    timeout=45.0  # ← max 15 seconds
                 )
                 if model_3d:
                     print(f"🎯 3D model: {model_3d['name']}")

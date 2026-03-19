@@ -211,7 +211,7 @@ async def get_3d_model_for_dish(dish_name: str) -> dict | None:
     for key, uid in CURATED_MODEL_UIDS.items():
         if key in dish_lower and uid:
             print(f"📦 Using curated model for '{dish_name}'")
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=40.0) as client:
                 result = await _get_curated_model(dish_name, client)
             return result  # ← return immediately, stop loop ✅
 
@@ -388,7 +388,7 @@ async def _get_curated_model(
 
     try:
         # ← Use fresh client with longer timeout
-        async with httpx.AsyncClient(timeout=30.0) as fresh_client:
+        async with httpx.AsyncClient(timeout=40.0) as fresh_client:
             model_response = await fresh_client.get(
                 download["url"],
                 timeout=30.0,
