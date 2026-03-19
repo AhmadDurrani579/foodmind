@@ -131,16 +131,16 @@ class ScanService:
             # ── Step 7: Get 3D Model ─────────  ← NEW
             model_3d = None
             try:
-                model_3d = await get_3d_model_for_dish(
-                    gemini_result.dish_name
+                model_3d = await asyncio.wait_for(
+                    get_3d_model_for_dish(gemini_result.dish_name),
+                    timeout=15.0  # ← max 15 seconds
                 )
                 if model_3d:
-                    print(f"🎯 3D model: {model_3d['name']} "
-                          f"({model_3d['format']})")
-                else:
-                    print("⚠️ No 3D model found → using photo fallback")
+                    print(f"🎯 3D model: {model_3d['name']}")
+            except asyncio.TimeoutError:
+                print("⚠️ 3D model timeout → skipping")
             except Exception as e:
-                print(f"⚠️ 3D model fetch failed: {e}")
+                print(f"⚠️ 3D model failed: {e}")
 
             # ── Step 8: Save to DB ───────────
             await self.save_scan(
