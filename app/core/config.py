@@ -11,8 +11,11 @@ class Settings(BaseSettings):
 
         # ── Gemini ────────────────────────
     GEMINI_API_KEY: str = ""
-
-
+    GEMINI_API_KEY_1: str = ""
+    GEMINI_API_KEY_2: str = ""
+    GEMINI_API_KEY_3: str = ""
+    GEMINI_API_KEY_4: str = ""
+    GEMINI_API_KEY_5: str = ""
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

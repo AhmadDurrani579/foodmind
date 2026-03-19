@@ -10,8 +10,21 @@ import json
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+import itertools
+from app.core.config import settings
 
 load_dotenv()
+
+API_KEYS = [k for k in [
+    settings.GEMINI_API_KEY,
+    settings.GEMINI_API_KEY_1,
+    settings.GEMINI_API_KEY_2,
+    settings.GEMINI_API_KEY_3,
+    settings.GEMINI_API_KEY_4,
+    settings.GEMINI_API_KEY_5,
+] if k]  # filter empty keys
+
+current_key_index = 0
 
 # ─────────────────────────────────────
 # MARK: — Gemini Client Setup
@@ -23,9 +36,16 @@ client = genai.Client(
 MODELS = [
     "gemini-2.5-flash",        # primary
     "gemini-2.0-flash",        # fallback 1
-    "gemini-1.5-flash-latest", # fallback 2 ← fix name
-    "gemini-1.0-pro-vision",   # fallback 3
 ]
+
+def get_next_client():
+    """Rotate to next API key"""
+    global current_key_index
+    if not API_KEYS:
+        return None
+    key = API_KEYS[current_key_index % len(API_KEYS)]
+    current_key_index += 1
+    return genai.Client(api_key=key)
 
 
 # ─────────────────────────────────────
@@ -146,8 +166,7 @@ async def analyse_food(
 
     segment_context = (
         f"\n\nIngredient analysis from computer vision: {segment_description}"
-        if segment_description
-        else ""
+        if segment_description else ""
     )
 
     prompt = FOOD_ANALYSIS_PROMPT.format(
@@ -155,13 +174,21 @@ async def analyse_food(
         mobilenet_confidence=int(mobilenet_confidence * 100)
     ) + segment_context
 
-    # ── Try each model in order ────────
+    # ── Try each model with each key ──
     for model_name in MODELS:
-        for attempt in range(2):  # 2 attempts per model
+        for key_attempt in range(len(API_KEYS)):
             try:
-                print(f"🤖 Trying {model_name} (attempt {attempt + 1})...")
+                # Get rotated client
+                api_client = get_next_client()
+                if not api_client:
+                    print("❌ No API keys configured")
+                    return _fallback_result(mobilenet_hint)
 
-                response = client.models.generate_content(
+                print(f"🤖 Trying {model_name} "
+                      f"(key {(current_key_index-1) % len(API_KEYS) + 1}"
+                      f"/{len(API_KEYS)})...")
+
+                response = api_client.models.generate_content(
                     model=model_name,
                     contents=[
                         types.Part.from_bytes(
@@ -183,35 +210,33 @@ async def analyse_food(
                 data   = json.loads(raw_text)
                 result = FoodAnalysisResult(data)
 
-                print(f"✅ Gemini ({model_name}): {result.dish_name} "
-                      f"({result.calories} kcal, {result.confidence}%)")
+                print(f"✅ {model_name}: {result.dish_name} "
+                      f"({result.calories} kcal)")
 
                 return result
 
             except json.JSONDecodeError as e:
-                print(f"❌ JSON parse error: {e}")
+                print(f"❌ JSON error: {e}")
                 return _fallback_result(mobilenet_hint)
 
             except Exception as e:
                 error_str = str(e)
 
-                # ── Rate limit → switch model ──
                 if "429" in error_str:
-                    print(f"⚠️ {model_name} rate limited → trying next model")
-                    break  # break attempt loop → try next model
+                    print(f"⚠️ {model_name} key "
+                          f"{(current_key_index-1) % len(API_KEYS) + 1} "
+                          f"rate limited → rotating key...")
+                    continue  # try next key
 
-                # ── Overloaded → wait and retry ──
-                if "503" in error_str and attempt < 1:
-                    print(f"⚠️ {model_name} overloaded → retrying in 5s...")
-                    await asyncio.sleep(5)
-                    continue
+                if "503" in error_str:
+                    print(f"⚠️ {model_name} overloaded → trying next...")
+                    await asyncio.sleep(3)
+                    break
 
-                # ── Other error → try next model ──
-                print(f"❌ {model_name} error: {e} → trying next model")
+                print(f"❌ {model_name} error: {e}")
                 break
 
-    # ── All models exhausted ───────────
-    print("❌ All models failed → using fallback")
+    print("❌ All models + keys exhausted → fallback")
     return _fallback_result(mobilenet_hint)
 
 # ─────────────────────────────────────
