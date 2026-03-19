@@ -10,17 +10,22 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch CPU first (before requirements.txt)
+# Fix NumPy version first
+RUN pip install --no-cache-dir "numpy<2.0"
+
+# Install PyTorch CPU
 RUN pip install --no-cache-dir \
     torch==2.1.0+cpu \
     torchvision==0.16.0+cpu \
     --extra-index-url https://download.pytorch.org/whl/cpu
 
-# Install transformers + accelerate separately
-# to ensure they use the torch already installed
+# Install transformers + accelerate
 RUN pip install --no-cache-dir \
-    transformers>=4.35.0 \
+    "transformers>=4.35.0" \
     accelerate
+
+# Verify torch works
+RUN python -c "import torch; print('Torch OK:', torch.__version__)"
 
 # Install all other dependencies
 COPY requirements.txt .
@@ -33,15 +38,14 @@ COPY . .
 RUN mkdir -p /app/uploads /app/cache
 
 # Pre-download SegFormer model during build
-# So first scan is fast not slow
 RUN python -c "\
+import torch; \
 from transformers import SegformerImageProcessor, SegformerForSemanticSegmentation; \
 SegformerImageProcessor.from_pretrained('LightDestory/segformer-b0-finetuned-segments-food-oct-24v2'); \
 SegformerForSemanticSegmentation.from_pretrained('LightDestory/segformer-b0-finetuned-segments-food-oct-24v2'); \
-print('SegFormer model cached')"
+print('SegFormer model cached successfully')"
 
 # HuggingFace Spaces uses port 7860
 EXPOSE 7860
 
-# Start FastAPI server
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]
