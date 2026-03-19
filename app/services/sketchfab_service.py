@@ -212,7 +212,8 @@ async def get_3d_model_for_dish(dish_name: str) -> dict | None:
         if key in dish_lower and uid:
             print(f"📦 Using curated model for '{dish_name}'")
             async with httpx.AsyncClient(timeout=15.0) as client:
-                return await _get_curated_model(dish_name, client)
+                result = await _get_curated_model(dish_name, client)
+            return result  # ← return immediately, stop loop ✅
 
     # ── Dynamic search ────────────────
     query = get_search_query(dish_name)
@@ -367,13 +368,8 @@ async def _get_curated_model(
     dish_name: str,
     client: httpx.AsyncClient
 ) -> dict | None:
-    """
-    Returns a known good model for the dish.
-    Uses pre-verified Sketchfab UIDs.
-    """
-    dish_lower = dish_name.lower()
 
-    # Find matching curated model
+    dish_lower = dish_name.lower()
     uid = None
     for key, model_uid in CURATED_MODEL_UIDS.items():
         if key in dish_lower and model_uid:
@@ -381,52 +377,57 @@ async def _get_curated_model(
             break
 
     if not uid:
-        print(f"⚠️ No curated model for '{dish_name}'")
         return None
 
-    print(f"📦 Using curated model for '{dish_name}'")
+    print(f"📦 Downloading curated model uid: {uid}")
 
     download = await get_model_download_url(uid)
     if not download:
+        print("❌ No download URL for curated model")
         return None
 
     try:
-        model_response = await client.get(
-            download["url"],
-            timeout=30.0,
-            follow_redirects=True
-        )
+        # ← Use fresh client with longer timeout
+        async with httpx.AsyncClient(timeout=30.0) as fresh_client:
+            model_response = await fresh_client.get(
+                download["url"],
+                timeout=30.0,
+                follow_redirects=True
+            )
 
-        if model_response.status_code != 200:
-            return None
+            if model_response.status_code != 200:
+                print(f"❌ Download failed: {model_response.status_code}")
+                return None
 
-        model_bytes = model_response.content
-        size_mb     = len(model_bytes) / (1024 * 1024)
+            model_bytes = model_response.content
+            size_mb     = len(model_bytes) / (1024 * 1024)
+            print(f"✅ Curated model downloaded: {size_mb:.1f}MB")
 
-        if size_mb > 8:
-            return None
+            if size_mb > 8:
+                print(f"⚠️ Too large: {size_mb:.1f}MB")
+                return None
 
-        permanent_url = await _upload_model_to_cloudinary(
-            model_bytes=model_bytes,
-            dish_name=dish_name,
-            fmt=download["format"]
-        )
+            permanent_url = await _upload_model_to_cloudinary(
+                model_bytes=model_bytes,
+                dish_name=dish_name,
+                fmt=download["format"]
+            )
 
-        if permanent_url:
-            return {
-                "url":     permanent_url,
-                "format":  download["format"],
-                "name":    f"{dish_name} 3D Model",
-                "author":  "sketchfab",
-                "license": "CC Attribution",
-                "uid":     uid
-            }
+            if permanent_url:
+                print(f"✅ Curated model uploaded: {permanent_url[:60]}")
+                return {
+                    "url":     permanent_url,
+                    "format":  download["format"],
+                    "name":    f"{dish_name} 3D Model",
+                    "author":  "sketchfab",
+                    "license": "CC Attribution",
+                    "uid":     uid
+                }
 
     except Exception as e:
         print(f"❌ Curated model error: {e}")
 
     return None
-
 
 # ─────────────────────────────────────
 # MARK: — Upload Model To Cloudinary
