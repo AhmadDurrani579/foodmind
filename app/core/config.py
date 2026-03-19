@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY_3: str = ""
     GEMINI_API_KEY_4: str = ""
     GEMINI_API_KEY_5: str = ""
+    SKETCHFAB_TOKEN: str = ""
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

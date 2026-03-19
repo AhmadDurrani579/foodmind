@@ -12,6 +12,7 @@ from google.genai import types
 from dotenv import load_dotenv
 import itertools
 from app.core.config import settings
+from app.services.sketchfab_service import get_3d_model_for_dish
 
 load_dotenv()
 

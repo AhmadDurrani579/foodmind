@@ -12,6 +12,7 @@ from app.db.database import SessionLocal
 from app.db.models_scan import ScanDB
 from app.services.cloudinary_service import upload_image
 from app.services.yolo_service import detect_food, estimate_calories
+from app.services.sketchfab_service import get_3d_model_for_dish
 
 FOOD_LABELS = [
                 "pizza", "burger", "hot dog", "sandwich",
@@ -87,7 +88,7 @@ class ScanService:
             # ── Step 3: Handle Gemini ────────
             used_fallback = False
             if isinstance(gemini_result, Exception):
-                print(f"⚠️ Gemini failed → YOLO fallback")
+                print(f"Gemini failed → YOLO fallback")
                 gemini_result = self._yolo_fallback(
                     yolo_data=yolo_data,
                     mobilenet_hint=mobilenet_hint
@@ -95,22 +96,19 @@ class ScanService:
                 used_fallback = True
 
             # ── Step 4: Fusion confidence ────
-
             if (not used_fallback and
                 yolo_data.get("detected") and
                 yolo_data.get("confidence", 0) > 0 and
                 any(food in yolo_data.get("label", "").lower()
-                    for food in FOOD_LABELS)):  # ← only fuse for food
+                    for food in FOOD_LABELS)):
 
-                yolo_conf = int(yolo_data["confidence"] * 100)
+                yolo_conf        = int(yolo_data["confidence"] * 100)
                 final_confidence = (gemini_result.confidence + yolo_conf) // 2
                 print(f"🔀 Fusion: Gemini {gemini_result.confidence}% "
-                    f"+ YOLO {yolo_conf}% = {final_confidence}%")
+                      f"+ YOLO {yolo_conf}% = {final_confidence}%")
             else:
-                # YOLO didn't detect food → use Gemini confidence only
                 final_confidence = gemini_result.confidence
                 print(f"ℹ️ YOLO non-food detection → using Gemini confidence only")
-
 
             # ── Step 5: Validate ─────────────
             validation = validate_results(
@@ -130,7 +128,21 @@ class ScanService:
             except Exception as e:
                 print(f"⚠️ Cloudinary failed: {e}")
 
-            # ── Step 7: Save to DB ───────────
+            # ── Step 7: Get 3D Model ─────────  ← NEW
+            model_3d = None
+            try:
+                model_3d = await get_3d_model_for_dish(
+                    gemini_result.dish_name
+                )
+                if model_3d:
+                    print(f"🎯 3D model: {model_3d['name']} "
+                          f"({model_3d['format']})")
+                else:
+                    print("⚠️ No 3D model found → using photo fallback")
+            except Exception as e:
+                print(f"⚠️ 3D model fetch failed: {e}")
+
+            # ── Step 8: Save to DB ───────────
             await self.save_scan(
                 user_id=user_id,
                 gemini_result=gemini_result,
@@ -140,7 +152,7 @@ class ScanService:
                 image_url=image_url
             )
 
-            # ── Step 8: Return ───────────────
+            # ── Step 9: Return ───────────────
             result_dict = gemini_result.to_dict()
             result_dict["confidence"] = final_confidence
 
@@ -155,6 +167,7 @@ class ScanService:
                     "bbox_norm":  yolo_data.get("bbox_norm", []),
                 },
                 "image_url":     image_url,
+                "model_3d":      model_3d,       # ← NEW
                 "used_fallback": used_fallback
             }
 
@@ -164,7 +177,7 @@ class ScanService:
                 "type":    "scan_error",
                 "message": str(e)
             }
-
+     
     # ─────────────────────────────────
     # MARK: — YOLO Fallback
     # ─────────────────────────────────
