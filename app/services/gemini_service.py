@@ -20,7 +20,11 @@ client = genai.Client(
     api_key=os.getenv("GEMINI_API_KEY")
 )
 
-MODEL = "gemini-2.5-flash"
+MODELS = [
+    "gemini-2.5-flash",   # primary
+    "gemini-2.0-flash",   # fallback 1
+    "gemini-1.5-flash",   # fallback 2
+]
 
 # ─────────────────────────────────────
 # MARK: — Prompt
@@ -129,15 +133,15 @@ class FoodAnalysisResult:
 # ─────────────────────────────────────
 # MARK: — Main Analysis Function
 # ─────────────────────────────────────
-async def analyse_food(
-    image_bytes: bytes,
-    mobilenet_hint: str = "unknown",
-    mobilenet_confidence: float = 0.0,
-    segment_description: str = ""  # ← new
-) -> FoodAnalysisResult:
+    async def analyse_food(
+        image_bytes: bytes,
+        mobilenet_hint: str = "unknown",
+        mobilenet_confidence: float = 0.0,
+        segment_description: str = ""
+    ) -> FoodAnalysisResult:
 
-    try:
-        # ── Build prompt with segment context ──
+        import asyncio
+
         segment_context = (
             f"\n\nIngredient analysis from computer vision: {segment_description}"
             if segment_description
@@ -147,42 +151,65 @@ async def analyse_food(
         prompt = FOOD_ANALYSIS_PROMPT.format(
             mobilenet_hint=mobilenet_hint,
             mobilenet_confidence=int(mobilenet_confidence * 100)
-        ) + segment_context  # ← append segments to existing prompt
+        ) + segment_context
 
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=[
-                types.Part.from_bytes(
-                    data=image_bytes,
-                    mime_type="image/jpeg"
-                ),
-                prompt
-            ]
-        )
+        # ── Try each model in order ────────
+        for model_name in MODELS:
+            for attempt in range(2):  # 2 attempts per model
+                try:
+                    print(f"🤖 Trying {model_name} (attempt {attempt + 1})...")
 
-        raw_text = response.text.strip()
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=[
+                            types.Part.from_bytes(
+                                data=image_bytes,
+                                mime_type="image/jpeg"
+                            ),
+                            prompt
+                        ]
+                    )
 
-        # Clean markdown if Gemini adds it
-        if raw_text.startswith("```"):
-            raw_text = raw_text.split("```")[1]
-            if raw_text.startswith("json"):
-                raw_text = raw_text[4:]
-            raw_text = raw_text.strip()
+                    raw_text = response.text.strip()
 
-        data   = json.loads(raw_text)
-        result = FoodAnalysisResult(data)
+                    if raw_text.startswith("```"):
+                        raw_text = raw_text.split("```")[1]
+                        if raw_text.startswith("json"):
+                            raw_text = raw_text[4:]
+                        raw_text = raw_text.strip()
 
-        print(f"Gemini: {result.dish_name} "
-              f"({result.calories} kcal, {result.confidence}%)")
+                    data   = json.loads(raw_text)
+                    result = FoodAnalysisResult(data)
 
-        return result
+                    print(f"✅ Gemini ({model_name}): {result.dish_name} "
+                        f"({result.calories} kcal, {result.confidence}%)")
 
-    except json.JSONDecodeError as e:
-        print(f"JSON parse error: {e}")
-        return _fallback_result(mobilenet_hint)
+                    return result
 
-    except Exception as e:
-        print(f"Gemini error: {e}")
+                except json.JSONDecodeError as e:
+                    print(f"❌ JSON parse error: {e}")
+                    return _fallback_result(mobilenet_hint)
+
+                except Exception as e:
+                    error_str = str(e)
+
+                    # ── Rate limit → switch model ──
+                    if "429" in error_str:
+                        print(f"⚠️ {model_name} rate limited → trying next model")
+                        break  # break attempt loop → try next model
+
+                    # ── Overloaded → wait and retry ──
+                    if "503" in error_str and attempt < 1:
+                        print(f"⚠️ {model_name} overloaded → retrying in 5s...")
+                        await asyncio.sleep(5)
+                        continue
+
+                    # ── Other error → try next model ──
+                    print(f"❌ {model_name} error: {e} → trying next model")
+                    break
+
+        # ── All models exhausted ───────────
+        print("❌ All models failed → using fallback")
         return _fallback_result(mobilenet_hint)
 
 
