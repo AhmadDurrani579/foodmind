@@ -138,7 +138,7 @@ class FoodAnalysisResult:
         mobilenet_hint: str = "unknown",
         mobilenet_confidence: float = 0.0,
         segment_description: str = ""
-    ) -> FoodAnalysisResult:
+    ) -> "FoodAnalysisResult":
 
         import asyncio
 
