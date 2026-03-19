@@ -43,6 +43,64 @@ DISH_SEARCH_MAP = {
     "bread":      "bread loaf food",
 }
 
+
+CURATED_MODEL_UIDS = {
+    "pizza":     "40d50989fec1460f8838b608d999ccd0",
+    "burger":    "6e13942ff76d4129b06e097cdd060adb",
+    "sushi":     "4012e8f4e2b4427c8334057a02b237ef",
+    "salmon":    "05859b0ed5e546fe986382c895d01ba2",
+    "sandwich":  "abbc30337667479b9897139d795c6018",
+    "cake":      "bbc008a362254407878a7dd8f4d3bc50",
+    "salad":     "e2a3f48382574bfba83e1ae8ba52860a",
+    "chicken":   "b94977a9810b4dc58eb288533e80579e",
+    "pasta":     "41d0893a071844f0b8d662d38e4c1f20",
+    "donut":     "c51866e4279948cb8488e7ad52021a46",
+    "waffle":    "a8d00d5e6f6f4703ae41fd146025cd2c",
+    "baklava":   "04b5df3590bf4ea9bbb5c3e30cf93c52",
+}
+ 
+# ─────────────────────────────────────
+# MARK: — Non-food Keywords
+# Models with these names are rejected
+# ─────────────────────────────────────
+NON_FOOD_KEYWORDS = [
+    "girl", "boy", "character", "human", "person",
+    "robot", "car", "building", "weapon", "gun",
+    "scifi", "sci-fi", "anime", "vehicle", "sword",
+    "tree", "house", "room", "interior", "exterior",
+    "animal", "cat", "dog", "bird", "monster",
+    "game", "asset", "pack", "collection", "scene",
+    "restaurant", "kitchen", "store", "shop",
+    "market", "cafe", "bar", "diner",
+    "lowpoly", "low poly", "low-poly",
+    "cut fish", "fruits & vegetables",
+]
+ 
+# ─────────────────────────────────────
+# MARK: — Common Food Words
+# Used for dynamic validation
+# ─────────────────────────────────────
+COMMON_FOOD = [
+    "pizza", "burger", "sushi", "food", "meal",
+    "sandwich", "cake", "donut", "chicken", "pasta",
+    "salad", "bread", "rice", "noodle", "soup",
+    "waffle", "taco", "steak", "fish", "seafood",
+    "japanese", "italian", "chinese", "asian",
+    "plate", "bowl", "dish", "roll", "slice",
+    "dessert", "sweet", "snack", "baked", "fried",
+    "grilled", "roasted", "fresh", "crispy",
+]
+
+def is_food_model(name: str, dish: str) -> bool:
+    name_lower = name.lower()
+    if any(kw in name_lower for kw in NON_FOOD_KEYWORDS):
+        return False
+    dish_words = [w for w in dish.lower().split() if len(w) > 3]
+    if any(w in name_lower for w in dish_words):
+        return True
+    return any(fw in name_lower for fw in COMMON_FOOD)
+
+
 def get_search_query(dish_name: str) -> str:
     """
     Maps dish name to best Sketchfab search query
@@ -178,30 +236,34 @@ async def get_model_download_url(uid: str) -> dict | None:
 # ─────────────────────────────────────
 
 
-
-
-
 async def get_3d_model_for_dish(dish_name: str) -> dict | None:
+    """
+    Hybrid approach:
+    1. Check curated models first (fast + correct)
+    2. Dynamic Sketchfab search as fallback
+    3. Validate result is actual food model
+    4. Download + upload to Cloudinary (permanent)
+    """
     if not SKETCHFAB_TOKEN:
         print("⚠️ No Sketchfab token configured")
         return None
-
-    # ── Check curated models FIRST ────
+ 
+    # ── Step 1: Check curated first ───
     dish_lower = dish_name.lower()
     for key, uid in CURATED_MODEL_UIDS.items():
         if key in dish_lower and uid:
             print(f"📦 Using curated model for '{dish_name}'")
             async with httpx.AsyncClient(timeout=40.0) as client:
-                result = await _get_curated_model(dish_name, client)
-            return result  # ← return immediately, stop loop ✅
-
-    # ── Dynamic search ────────────────
+                result = await _get_curated_model(dish_name, client, uid)
+            return result  # ← return immediately ✅
+ 
+    # ── Step 2: Dynamic search ────────
     query = get_search_query(dish_name)
     print(f"🔍 Sketchfab search: '{query}' for '{dish_name}'")
-
+ 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-
+ 
             response = await client.get(
                 f"{SKETCHFAB_API}/models",
                 params={
@@ -216,115 +278,78 @@ async def get_3d_model_for_dish(dish_name: str) -> dict | None:
                     "Authorization": f"Token {SKETCHFAB_TOKEN}"
                 }
             )
-
+ 
             if response.status_code != 200:
                 print(f"❌ Search failed: {response.status_code}")
                 return None
-
-            results = response.json().get("results", [])
-
-            NON_FOOD_KEYWORDS = [
-                "girl", "boy", "character", "human", "person",
-                "robot", "car", "building", "weapon", "gun",
-                "scifi", "sci-fi", "anime", "vehicle", "sword",
-                "tree", "house", "room", "interior", "exterior",
-                "animal", "cat", "dog", "bird", "monster",
-                "game", "asset", "pack", "collection", "scene",
-                "restaurant", "kitchen", "store", "shop",
-                "market", "cafe", "bar", "diner"
-            ]
-
-            # ── STRICT food validation ────────
-            def is_food_model(name: str, dish: str) -> bool:
-                name_lower = name.lower()
-
-                # Reject non-food
-                if any(kw in name_lower for kw in NON_FOOD_KEYWORDS):
-                    return False
-
-                # Check dish words in model name
-                dish_words = [
-                    w for w in dish.lower().split()
-                    if len(w) > 3
-                ]
-                if any(w in name_lower for w in dish_words):
-                    return True
-
-                # ← ADD BACK general food check
-                # but only for common food words
-                COMMON_FOOD = [
-                    "pizza", "burger", "sushi", "food", "meal",
-                    "sandwich", "cake", "donut", "chicken", "pasta",
-                    "salad", "bread", "rice", "noodle", "soup",
-                    "waffle", "taco", "steak", "fish", "seafood",
-                    "japanese", "italian", "chinese", "asian",
-                    "plate", "bowl", "dish", "roll", "slice"
-                ]
-                return any(fw in name_lower for fw in COMMON_FOOD)
+ 
+            results      = response.json().get("results", [])
             food_results = [
                 r for r in results
                 if is_food_model(r["name"], dish_name)
             ]
-
+ 
             print(f"📊 {len(results)} total → {len(food_results)} food models")
-
+ 
             if not food_results:
                 print(f"⚠️ No matching models → skipping")
                 return None
-
+ 
+            # ── Step 3: Try each food model ──
             for candidate in food_results:
                 uid  = candidate["uid"]
                 name = candidate["name"]
-
+ 
                 print(f"🔎 Trying: {name}")
-
+ 
                 download = await get_model_download_url(uid)
                 if not download:
                     await asyncio.sleep(0.2)
                     continue
-
+ 
                 temp_url = download["url"]
                 fmt      = download["format"]
-
+ 
                 print(f"⬇️ Downloading {fmt}: {name}...")
-
+ 
                 try:
                     model_response = await client.get(
                         temp_url,
                         timeout=30.0,
                         follow_redirects=True
                     )
-
+ 
                     if model_response.status_code != 200:
                         await asyncio.sleep(0.2)
                         continue
-
+ 
                     model_bytes = model_response.content
                     size_mb     = len(model_bytes) / (1024 * 1024)
                     print(f"✅ Downloaded {size_mb:.1f}MB")
-
+ 
                     if size_mb > 8:
                         print(f"⚠️ Too large → skipping")
                         await asyncio.sleep(0.2)
                         continue
-
+ 
                 except Exception as e:
                     print(f"❌ Download error: {e}")
                     await asyncio.sleep(0.2)
                     continue
-
+ 
+                # ── Step 4: Upload to Cloudinary ──
                 permanent_url = await _upload_model_to_cloudinary(
                     model_bytes=model_bytes,
                     dish_name=dish_name,
                     fmt=fmt
                 )
-
+ 
                 if not permanent_url:
                     await asyncio.sleep(0.2)
                     continue
-
+ 
                 print(f"🎯 3D model ready: {name}")
-
+ 
                 return {
                     "url":     permanent_url,
                     "format":  fmt,
@@ -333,10 +358,10 @@ async def get_3d_model_for_dish(dish_name: str) -> dict | None:
                     "license": candidate.get("license", {}).get("label", "CC Attribution"),
                     "uid":     uid
                 }
-
+ 
     except Exception as e:
         print(f"❌ get_3d_model_for_dish error: {e}")
-
+ 
     return None
 
 # ─────────────────────────────────────
@@ -346,66 +371,59 @@ async def get_3d_model_for_dish(dish_name: str) -> dict | None:
 # ─────────────────────────────────────
 CURATED_MODEL_UIDS = {
     "pizza":     "40d50989fec1460f8838b608d999ccd0",  # replace with real UIDs
-    "burger":    "18e59d7dbd2243c69f469e0f056f44c4",
-    "sushi":     "",
-    "sandwich":  "",
-    "cake":      "",
-    "salad":     "",
-    "chicken":   "",
-    "pasta":     "",
-    "donut":     "",
-    "waffle":    "",
+    "burger":    "6e13942ff76d4129b06e097cdd060adb",
+    "sushi":     "4012e8f4e2b4427c8334057a02b237ef",
+    "sandwich":  "abbc30337667479b9897139d795c6018",
+    "cake":      "bbc008a362254407878a7dd8f4d3bc50",
+    "salad":     "e2a3f48382574bfba83e1ae8ba52860a",
+    "chicken":   "b94977a9810b4dc58eb288533e80579e",
+    "pasta":     "41d0893a071844f0b8d662d38e4c1f20",
+    "donut":     "c51866e4279948cb8488e7ad52021a46",
+    "waffle":    "a8d00d5e6f6f4703ae41fd146025cd2c",
+    "baklava":   "04b5df3590bf4ea9bbb5c3e30cf93c52",
 }
 
 async def _get_curated_model(
     dish_name: str,
-    client: httpx.AsyncClient
+    client:    httpx.AsyncClient,
+    uid:       str
 ) -> dict | None:
-
-    dish_lower = dish_name.lower()
-    uid = None
-    for key, model_uid in CURATED_MODEL_UIDS.items():
-        if key in dish_lower and model_uid:
-            uid = model_uid
-            break
-
-    if not uid:
-        return None
-
-    print(f"📦 Downloading curated model uid: {uid}")
-
+    """
+    Downloads and caches a verified curated model.
+    """
+    print(f"📦 Downloading curated uid: {uid}")
+ 
     download = await get_model_download_url(uid)
     if not download:
         print("❌ No download URL for curated model")
         return None
-
+ 
     try:
-        # ← Use fresh client with longer timeout
         async with httpx.AsyncClient(timeout=40.0) as fresh_client:
             model_response = await fresh_client.get(
                 download["url"],
-                timeout=30.0,
+                timeout=40.0,
                 follow_redirects=True
             )
-
+ 
             if model_response.status_code != 200:
                 print(f"❌ Download failed: {model_response.status_code}")
                 return None
-
+ 
             model_bytes = model_response.content
             size_mb     = len(model_bytes) / (1024 * 1024)
             print(f"✅ Curated model downloaded: {size_mb:.1f}MB")
-
+ 
             if size_mb > 10:
                 print(f"⚠️ Too large: {size_mb:.1f}MB")
                 return None
-
+ 
             permanent_url = await _upload_model_to_cloudinary(
                 model_bytes=model_bytes,
                 dish_name=dish_name,
                 fmt=download["format"]
             )
-
+ 
             if permanent_url:
                 print(f"✅ Curated model uploaded: {permanent_url[:60]}")
                 return {
@@ -416,10 +434,10 @@ async def _get_curated_model(
                     "license": "CC Attribution",
                     "uid":     uid
                 }
-
+ 
     except Exception as e:
         print(f"❌ Curated model error: {e}")
-
+ 
     return None
 
 # ─────────────────────────────────────
