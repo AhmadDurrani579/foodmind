@@ -469,7 +469,6 @@ async def _upload_model_to_cloudinary(
             model_bytes,
             public_id=public_id,
             resource_type="raw",        # ← raw for 3D files
-            format=fmt,
             overwrite=True,             # ← cache — reuse same model
         )
  
