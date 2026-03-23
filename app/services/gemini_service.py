@@ -12,7 +12,6 @@ from google.genai import types
 from dotenv import load_dotenv
 import itertools
 from app.core.config import settings
-from app.services.sketchfab_service import get_3d_model_for_dish
 
 load_dotenv()
 
@@ -236,7 +235,7 @@ async def analyse_food(
                 return result
 
             except json.JSONDecodeError as e:
-                print(f"❌ JSON error: {e}")
+                print(f"JSON error: {e}")
                 return _fallback_result(mobilenet_hint)
 
             except Exception as e:
@@ -253,10 +252,10 @@ async def analyse_food(
                     await asyncio.sleep(3)
                     break
 
-                print(f"❌ {model_name} error: {e}")
+                print(f" {model_name} error: {e}")
                 break
 
-    print("❌ All models + keys exhausted → fallback")
+    print("All models + keys exhausted → fallback")
     return _fallback_result(mobilenet_hint)
 
 # ─────────────────────────────────────

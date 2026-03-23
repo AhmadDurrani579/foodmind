@@ -50,7 +50,7 @@ class ScanService:
             print(f"📸 Image: {len(image_bytes)} bytes")
 
             # ── Step 1: YOLO + Gemini parallel ──
-            print("🔀 Running YOLO + Gemini in parallel...")
+            print(" Running YOLO + Gemini in parallel...")
 
             yolo_task = asyncio.create_task(
                 detect_food(image_bytes)
@@ -72,7 +72,7 @@ class ScanService:
             # ── Step 2: Handle YOLO ──────────
             yolo_data = {}
             if isinstance(yolo_result, Exception):
-                print(f"⚠️ YOLO failed: {yolo_result}")
+                print(f" YOLO failed: {yolo_result}")
                 yolo_data = {
                     "detected":   False,
                     "label":      "unknown",
@@ -104,11 +104,11 @@ class ScanService:
 
                 yolo_conf        = int(yolo_data["confidence"] * 100)
                 final_confidence = (gemini_result.confidence + yolo_conf) // 2
-                print(f"🔀 Fusion: Gemini {gemini_result.confidence}% "
+                print(f" Fusion: Gemini {gemini_result.confidence}% "
                       f"+ YOLO {yolo_conf}% = {final_confidence}%")
             else:
                 final_confidence = gemini_result.confidence
-                print(f"ℹ️ YOLO non-food detection → using Gemini confidence only")
+                print(f" YOLO non-food detection → using Gemini confidence only")
 
             # ── Step 5: Validate ─────────────
             validation = validate_results(
@@ -126,7 +126,7 @@ class ScanService:
                     dish_name=gemini_result.dish_name
                 )
             except Exception as e:
-                print(f"⚠️ Cloudinary failed: {e}")
+                print(f"Cloudinary failed: {e}")
 
             # ── Step 7: Get 3D Model ─────────  ← NEW
             model_3d = None
@@ -136,11 +136,11 @@ class ScanService:
                     timeout=45.0  # ← max 15 seconds
                 )
                 if model_3d:
-                    print(f"🎯 3D model: {model_3d['name']}")
+                    print(f"3D model: {model_3d['name']}")
             except asyncio.TimeoutError:
-                print("⚠️ 3D model timeout → skipping")
+                print(" 3D model timeout → skipping")
             except Exception as e:
-                print(f"⚠️ 3D model failed: {e}")
+                print(f" 3D model failed: {e}")
 
             # ── Step 8: Save to DB ───────────
             await self.save_scan(
@@ -172,7 +172,7 @@ class ScanService:
             }
 
         except Exception as e:
-            print(f"❌ Scan error: {e}")
+            print(f" Scan error: {e}")
             return {
                 "type":    "scan_error",
                 "message": str(e)
@@ -230,9 +230,9 @@ class ScanService:
             )
             db.add(scan)
             db.commit()
-            print(f"✅ Scan saved: {gemini_result.dish_name}")
+            print(f" Scan saved: {gemini_result.dish_name}")
         except Exception as e:
-            print(f"❌ Save error: {e}")
+            print(f" Save error: {e}")
             db.rollback()
         finally:
             db.close()
